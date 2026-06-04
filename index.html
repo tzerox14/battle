@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BattleJS</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#1a1a1a;color:#fff;font-family:'Inter',sans-serif;overflow:hidden;width:100vw;height:100vh}
+#ui{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:10}
+canvas{display:block}
+#lobby,#gameover{position:absolute;top:0;left:0;width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#111;z-index:20}
+.title{font-family:'Bebas Neue',sans-serif;font-size:72px;letter-spacing:6px;margin-bottom:6px}
+.sub{font-size:13px;color:#555;letter-spacing:2px;text-transform:uppercase;margin-bottom:36px}
+.card{background:#1a1a1a;border:1px solid #2a2a2a;border-radius:16px;padding:28px;width:400px;max-width:95vw}
+.card h2{font-size:16px;font-weight:600;margin-bottom:16px;color:#aaa}
+input{width:100%;background:#111;border:1px solid #333;border-radius:8px;padding:11px 14px;font-size:15px;color:#fff;font-family:'Inter',sans-serif;outline:none}
+input:focus{border-color:#555}
+.btn{width:100%;padding:13px;border-radius:8px;border:none;font-size:15px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif;margin-top:10px;transition:opacity .15s}
+.btn-white{background:#fff;color:#111}.btn-white:hover{opacity:.9}
+.btn-gray{background:#222;color:#888;border:1px solid #333}.btn-gray:hover{background:#2a2a2a}
+.plist{margin:12px 0;display:flex;flex-direction:column;gap:6px}
+.pchip{display:flex;align-items:center;gap:10px;background:#111;border:1px solid #222;border-radius:6px;padding:8px 12px;font-size:13px;color:#ccc}
+.dot{width:10px;height:10px;border-radius:50%}
+.status{font-size:12px;color:#444;text-align:center;margin-top:12px}
+
+/* HUD */
+#hud-top{position:absolute;top:12px;left:50%;transform:translateX(-50%);display:flex;gap:8px;align-items:center}
+#zone-timer{background:rgba(0,0,0,.7);border:1px solid #333;border-radius:8px;padding:6px 14px;font-size:13px;color:#fff;font-family:'Bebas Neue',sans-serif;letter-spacing:1px}
+#alive-count{background:rgba(0,0,0,.7);border:1px solid #333;border-radius:8px;padding:6px 14px;font-size:13px;color:#aaa}
+
+#hud-bottom{position:absolute;bottom:16px;left:16px;pointer-events:none}
+#hp-bar-wrap{margin-bottom:6px}
+.bar-label{font-size:11px;color:#888;margin-bottom:3px}
+.bar-bg{background:#222;border-radius:4px;height:8px;width:180px}
+.bar-fill{height:8px;border-radius:4px;transition:width .1s}
+#hp-fill{background:#2ecc71}
+#shield-fill{background:#3498db}
+#weapon-info{background:rgba(0,0,0,.7);border:1px solid #333;border-radius:8px;padding:8px 14px;margin-top:8px;font-size:13px}
+#weapon-name{font-weight:600;color:#fff}
+#weapon-ammo{color:#888;font-size:12px;margin-top:2px}
+
+#kill-feed{position:absolute;top:60px;right:12px;display:flex;flex-direction:column;gap:4px;max-width:260px}
+.kill-msg{background:rgba(0,0,0,.7);border:1px solid #333;border-radius:6px;padding:5px 10px;font-size:12px;color:#ccc;animation:fadeKill 3s forwards}
+@keyframes fadeKill{0%{opacity:1}70%{opacity:1}100%{opacity:0}}
+
+#minimap{position:absolute;bottom:16px;right:16px;border:1px solid #333;border-radius:8px;overflow:hidden}
+
+#crosshair{position:absolute;pointer-events:none;width:20px;height:20px;transform:translate(-50%,-50%)}
+#crosshair::before,#crosshair::after{content:'';position:absolute;background:rgba(255,255,255,.8)}
+#crosshair::before{width:2px;height:20px;left:9px;top:0}
+#crosshair::after{width:20px;height:2px;top:9px;left:0}
+
+#controls-hint{position:absolute;top:12px;left:12px;background:rgba(0,0,0,.6);border:1px solid #222;border-radius:8px;padding:8px 12px;font-size:11px;color:#555;line-height:1.8}
+
+.gameover-big{font-family:'Bebas Neue',sans-serif;font-size:80px;letter-spacing:4px;margin-bottom:8px}
+.go-sub{font-size:16px;color:#888;margin-bottom:32px}
+</style>
+</head>
+<body>
+
+<div id="lobby">
+  <div class="title" style="color:#fff">BATTLEJS</div>
+  <div class="sub">Battle Royale · 10 joueurs</div>
+  <div class="card" id="joinCard">
+    <h2>Rejoindre la partie</h2>
+    <input id="nameInput" type="text" placeholder="Ton pseudo" maxlength="16" autofocus>
+    <button class="btn btn-white" onclick="joinGame()">Rejoindre</button>
+    <div class="status" id="connStatus">Connexion...</div>
+  </div>
+</div>
+
+<div id="lobbyWait" style="display:none;position:absolute;top:0;left:0;width:100%;height:100%;flex-direction:column;align-items:center;justify-content:center;background:#111;z-index:20">
+  <div class="title">BATTLEJS</div>
+  <div class="sub">Lobby</div>
+  <div class="card">
+    <h2>Joueurs connectés</h2>
+    <div class="plist" id="playerList"></div>
+    <button class="btn btn-white" onclick="startGame()">Lancer la partie</button>
+    <div class="status" id="lobbyStatus">En attente...</div>
+  </div>
+</div>
+
+<div id="gameover" style="display:none">
+  <div class="gameover-big" id="goTitle">GAME OVER</div>
+  <div class="go-sub" id="goSub"></div>
+  <button class="btn btn-gray" onclick="restartGame()" style="width:220px">Rejouer</button>
+</div>
+
+<canvas id="c"></canvas>
+
+<div id="ui">
+  <div id="hud-top" style="display:none">
+    <div id="zone-timer">ZONE</div>
+    <div id="alive-count">? survivants</div>
+  </div>
+  <div id="hud-bottom" style="display:none">
+    <div id="hp-bar-wrap">
+      <div class="bar-label">VIE</div>
+      <div class="bar-bg"><div class="bar-fill" id="hp-fill" style="width:100%"></div></div>
+    </div>
+    <div id="hp-bar-wrap">
+      <div class="bar-label" style="margin-top:4px">BOUCLIER</div>
+      <div class="bar-bg"><div class="bar-fill" id="shield-fill" style="width:0%"></div></div>
+    </div>
+    <div id="weapon-info">
+      <div id="weapon-name">Pistolet</div>
+      <div id="weapon-ammo">30 balles</div>
+    </div>
+  </div>
+  <div id="kill-feed"></div>
+  <canvas id="minimap" width="140" height="140" style="display:none"></canvas>
+  <div id="crosshair" style="display:none"></div>
+  <div id="controls-hint" style="display:none">
+    ZQSD / ↑←↓→ — Déplacer<br>
+    Clic gauche — Tirer<br>
+    Reste dans la zone blanche !
+  </div>
+</div>
+
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+const miniCanvas = document.getElementById('minimap');
+const miniCtx = miniCanvas.getContext('2d');
+
+let W = window.innerWidth, H = window.innerHeight;
+canvas.width = W; canvas.height = H;
+
+window.addEventListener('resize', () => {
+  W = window.innerWidth; H = window.innerHeight;
+  canvas.width = W; canvas.height = H;
+});
+
+let ws, myId, myColor;
+let gameState = 'lobby';
+let remotePlayers = [], remoteBullets = [], remoteLoots = [];
+let remoteZone = { x: 1500, y: 1500, radius: 2100 };
+let mapWalls = [], MAP_W = 3000, MAP_H = 3000;
+let camX = 0, camY = 0;
+let mouseX = W/2, mouseY = H/2;
+let mouseDown = false;
+let inputs = { up:false, down:false, left:false, right:false, shoot:false, angle:0 };
+let lastSent = {};
+let inputInterval;
+const WEAPONS_INFO = {
+  pistol:  { name:'Pistolet',     color:'#aaa' },
+  shotgun: { name:'Shotgun',      color:'#c8a96e' },
+  rifle:   { name:'Fusil',        color:'#6eb5c8' },
+  smg:     { name:'Mitraillette', color:'#c86e6e' },
+};
+
+document.addEventListener('mousemove', e => { mouseX = e.clientX; mouseY = e.clientY; });
+document.addEventListener('mousedown', e => { if (e.button === 0) mouseDown = true; });
+document.addEventListener('mouseup',   e => { if (e.button === 0) mouseDown = false; });
+document.addEventListener('contextmenu', e => e.preventDefault());
+
+document.addEventListener('keydown', e => {
+  if (gameState !== 'playing') return;
+  if (e.key==='z'||e.key==='Z'||e.key==='ArrowUp') inputs.up=true;
+  if (e.key==='s'||e.key==='S'||e.key==='ArrowDown') inputs.down=true;
+  if (e.key==='q'||e.key==='Q'||e.key==='ArrowLeft') inputs.left=true;
+  if (e.key==='d'||e.key==='D'||e.key==='ArrowRight') inputs.right=true;
+  e.preventDefault();
+});
+document.addEventListener('keyup', e => {
+  if (e.key==='z'||e.key==='Z'||e.key==='ArrowUp') inputs.up=false;
+  if (e.key==='s'||e.key==='S'||e.key==='ArrowDown') inputs.down=false;
+  if (e.key==='q'||e.key==='Q'||e.key==='ArrowLeft') inputs.left=false;
+  if (e.key==='d'||e.key==='D'||e.key==='ArrowRight') inputs.right=false;
+});
+
+function connect() {
+  const proto = location.protocol==='https:' ? 'wss' : 'ws';
+  ws = new WebSocket(`${proto}://${location.host}`);
+  ws.onopen = () => document.getElementById('connStatus').textContent = 'Connecté !';
+  ws.onclose = () => document.getElementById('connStatus').textContent = 'Déconnecté.';
+  ws.onmessage = e => handleMsg(JSON.parse(e.data));
+}
+
+function handleMsg(msg) {
+  if (msg.type === 'init') { gameState = msg.gameState; }
+  if (msg.type === 'joined') { myId = msg.id; myColor = msg.color; showLobbyWait(); }
+  if (msg.type === 'lobby') { updateLobby(msg.players); }
+  if (msg.type === 'gameStart') {
+    mapWalls = msg.map.walls;
+    MAP_W = msg.map.w; MAP_H = msg.map.h;
+    remoteLoots = msg.map.loots;
+    startLocal();
+  }
+  if (msg.type === 'gameState') {
+    remotePlayers = msg.players;
+    remoteBullets = msg.bullets;
+    remoteZone = msg.zone;
+    if (msg.loots) remoteLoots = msg.loots;
+    if (gameState === 'playing') renderFrame();
+  }
+  if (msg.type === 'playerDied') addKillFeed(msg);
+  if (msg.type === 'gameOver') { gameState = 'ended'; showGameOver(msg.winner); }
+}
+
+function joinGame() {
+  const name = document.getElementById('nameInput').value.trim() || 'Joueur';
+  ws.send(JSON.stringify({ type: 'join', name }));
+}
+document.getElementById('nameInput').addEventListener('keydown', e => { if(e.key==='Enter') joinGame(); });
+
+function showLobbyWait() {
+  document.getElementById('lobby').style.display = 'none';
+  document.getElementById('lobbyWait').style.display = 'flex';
+}
+
+function updateLobby(players) {
+  const list = document.getElementById('playerList');
+  list.innerHTML = '';
+  players.forEach(p => {
+    const d = document.createElement('div');
+    d.className = 'pchip';
+    d.innerHTML = `<div class="dot" style="background:${p.color}"></div><span>${p.name}${p.id===myId?' (toi)':''}</span>`;
+    list.appendChild(d);
+  });
+  document.getElementById('lobbyStatus').textContent = `${players.length}/10 joueurs`;
+}
+
+function startGame() { ws.send(JSON.stringify({ type: 'startGame' })); }
+function restartGame() { ws.send(JSON.stringify({ type: 'restart' })); location.reload(); }
+
+function startLocal() {
+  gameState = 'playing';
+  document.getElementById('lobbyWait').style.display = 'none';
+  document.getElementById('lobby').style.display = 'none';
+  document.getElementById('gameover').style.display = 'none';
+  document.getElementById('hud-top').style.display = 'flex';
+  document.getElementById('hud-bottom').style.display = 'block';
+  document.getElementById('minimap').style.display = 'block';
+  document.getElementById('crosshair').style.display = 'block';
+  document.getElementById('controls-hint').style.display = 'block';
+  document.body.style.cursor = 'none';
+
+  clearInterval(inputInterval);
+  inputInterval = setInterval(sendInputs, 1000/60);
+}
+
+function sendInputs() {
+  const me = remotePlayers.find(p => p.id === myId);
+  if (!me || !me.alive) return;
+  const angle = Math.atan2(mouseY - H/2, mouseX - W/2);
+  inputs.shoot = mouseDown;
+  inputs.angle = angle;
+  const cur = {...inputs};
+  const changed = JSON.stringify(cur) !== JSON.stringify(lastSent);
+  if (changed) {
+    ws.send(JSON.stringify({ type: 'inputs', inputs: cur }));
+    lastSent = {...cur};
+  }
+}
+
+function showGameOver(winner) {
+  document.getElementById('hud-top').style.display = 'none';
+  document.getElementById('hud-bottom').style.display = 'none';
+  document.getElementById('minimap').style.display = 'none';
+  document.getElementById('crosshair').style.display = 'none';
+  document.getElementById('controls-hint').style.display = 'none';
+  document.body.style.cursor = 'default';
+  const go = document.getElementById('gameover');
+  go.style.display = 'flex';
+  if (winner) {
+    const isMe = winner.id === myId;
+    document.getElementById('goTitle').textContent = isMe ? 'VICTOIRE !' : 'DÉFAITE';
+    document.getElementById('goTitle').style.color = winner.color;
+    document.getElementById('goSub').textContent = `${winner.name} remporte la partie avec ${winner.kills} kill${winner.kills!==1?'s':''}`;
+  } else {
+    document.getElementById('goTitle').textContent = 'MATCH NUL';
+    document.getElementById('goSub').textContent = 'Tout le monde est mort';
+  }
+}
+
+function addKillFeed(msg) {
+  const feed = document.getElementById('kill-feed');
+  const d = document.createElement('div');
+  d.className = 'kill-msg';
+  if (msg.killerId) {
+    d.textContent = `${msg.killerName} ✕ ${msg.name}`;
+  } else {
+    d.textContent = `${msg.name} éliminé par la zone`;
+  }
+  feed.appendChild(d);
+  setTimeout(() => d.remove(), 3000);
+}
+
+function renderFrame() {
+  const me = remotePlayers.find(p => p.id === myId);
+  if (me) {
+    camX = me.x - W/2;
+    camY = me.y - H/2;
+    camX = Math.max(0, Math.min(MAP_W - W, camX));
+    camY = Math.max(0, Math.min(MAP_H - H, camY));
+    updateHUD(me);
+  }
+
+  ctx.clearRect(0, 0, W, H);
+  ctx.save();
+  ctx.translate(-camX, -camY);
+
+  drawMap();
+  drawZone();
+  drawLoots();
+  drawPlayers();
+  drawBullets();
+
+  ctx.restore();
+  drawMinimap();
+  updateCrosshair();
+}
+
+function drawMap() {
+  ctx.fillStyle = '#1a1a1a';
+  ctx.fillRect(0, 0, MAP_W, MAP_H);
+
+  // Grid
+  ctx.strokeStyle = '#222';
+  ctx.lineWidth = 1;
+  for (let x = 0; x < MAP_W; x += 100) {
+    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, MAP_H); ctx.stroke();
+  }
+  for (let y = 0; y < MAP_H; y += 100) {
+    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(MAP_W, y); ctx.stroke();
+  }
+
+  // Walls / buildings
+  mapWalls.forEach((w, i) => {
+    const isOuter = i < 4;
+    ctx.fillStyle = isOuter ? '#111' : '#2a2a35';
+    ctx.fillRect(w.x, w.y, w.w, w.h);
+    if (!isOuter) {
+      ctx.strokeStyle = '#3a3a4a';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(w.x, w.y, w.w, w.h);
+    }
+  });
+}
+
+function drawZone() {
+  const z = remoteZone;
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(z.x, z.y, z.radius, 0, Math.PI*2);
+  ctx.rect(MAP_W, 0, -MAP_W, MAP_H);
+  ctx.fillStyle = 'rgba(0, 60, 120, 0.35)';
+  ctx.fill('evenodd');
+  ctx.beginPath();
+  ctx.arc(z.x, z.y, z.radius, 0, Math.PI*2);
+  ctx.strokeStyle = 'rgba(100, 180, 255, 0.8)';
+  ctx.lineWidth = 3;
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawLoots() {
+  remoteLoots.forEach(l => {
+    const col = { pistol:'#aaa', shotgun:'#c8a96e', rifle:'#6eb5c8', smg:'#c86e6e' }[l.type] || '#fff';
+    ctx.beginPath();
+    ctx.arc(l.x, l.y, 10, 0, Math.PI*2);
+    ctx.fillStyle = col + '33';
+    ctx.fill();
+    ctx.strokeStyle = col;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.fillStyle = col;
+    ctx.font = 'bold 9px Inter';
+    ctx.textAlign = 'center';
+    ctx.fillText(l.type.toUpperCase(), l.x, l.y + 4);
+  });
+}
+
+function drawPlayers() {
+  remotePlayers.forEach(p => {
+    if (!p.alive) return;
+    const isMe = p.id === myId;
+
+    ctx.save();
+    ctx.translate(p.x, p.y);
+
+    // Shadow
+    ctx.beginPath();
+    ctx.ellipse(0, 8, 18, 8, 0, 0, Math.PI*2);
+    ctx.fillStyle = 'rgba(0,0,0,0.3)';
+    ctx.fill();
+
+    // Body
+    ctx.beginPath();
+    ctx.arc(0, 0, 18, 0, Math.PI*2);
+    ctx.fillStyle = p.color;
+    ctx.fill();
+    if (isMe) {
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    }
+
+    // Direction indicator
+    ctx.save();
+    ctx.rotate(p.angle);
+    ctx.fillStyle = isMe ? '#fff' : 'rgba(255,255,255,0.7)';
+    ctx.fillRect(14, -3, 14, 6);
+    ctx.restore();
+
+    // Name
+    ctx.fillStyle = '#fff';
+    ctx.font = `${isMe ? 'bold ' : ''}11px Inter`;
+    ctx.textAlign = 'center';
+    ctx.fillText(p.name, 0, -26);
+
+    // HP bar
+    const bw = 36;
+    ctx.fillStyle = '#333';
+    ctx.fillRect(-bw/2, -22, bw, 4);
+    ctx.fillStyle = p.hp > 60 ? '#2ecc71' : p.hp > 30 ? '#f39c12' : '#e74c3c';
+    ctx.fillRect(-bw/2, -22, bw * (p.hp/100), 4);
+
+    ctx.restore();
+  });
+}
+
+function drawBullets() {
+  remoteBullets.forEach(b => {
+    ctx.beginPath();
+    ctx.arc(b.x, b.y, 4, 0, Math.PI*2);
+    ctx.fillStyle = b.color || '#fff';
+    ctx.fill();
+  });
+}
+
+function drawMinimap() {
+  const S = 140;
+  const scale = S / MAP_W;
+  miniCtx.clearRect(0, 0, S, S);
+  miniCtx.fillStyle = '#111';
+  miniCtx.fillRect(0, 0, S, S);
+
+  // Walls
+  miniCtx.fillStyle = '#2a2a35';
+  mapWalls.slice(4).forEach(w => {
+    miniCtx.fillRect(w.x*scale, w.y*scale, w.w*scale, w.h*scale);
+  });
+
+  // Zone
+  const z = remoteZone;
+  miniCtx.beginPath();
+  miniCtx.arc(z.x*scale, z.y*scale, z.radius*scale, 0, Math.PI*2);
+  miniCtx.strokeStyle = 'rgba(100,180,255,0.8)';
+  miniCtx.lineWidth = 1.5;
+  miniCtx.stroke();
+
+  // Players
+  remotePlayers.forEach(p => {
+    if (!p.alive) return;
+    miniCtx.beginPath();
+    miniCtx.arc(p.x*scale, p.y*scale, p.id===myId ? 4 : 3, 0, Math.PI*2);
+    miniCtx.fillStyle = p.color;
+    miniCtx.fill();
+    if (p.id===myId) {
+      miniCtx.strokeStyle = '#fff';
+      miniCtx.lineWidth = 1;
+      miniCtx.stroke();
+    }
+  });
+
+  // Camera rect
+  miniCtx.strokeStyle = 'rgba(255,255,255,0.3)';
+  miniCtx.lineWidth = 1;
+  miniCtx.strokeRect(camX*scale, camY*scale, W*scale, H*scale);
+}
+
+function updateHUD(me) {
+  document.getElementById('hp-fill').style.width = (me.hp) + '%';
+  document.getElementById('shield-fill').style.width = (me.shield/50*100) + '%';
+  const wi = WEAPONS_INFO[me.weapon] || { name: me.weapon, color:'#fff' };
+  document.getElementById('weapon-name').textContent = wi.name;
+  document.getElementById('weapon-name').style.color = wi.color;
+  document.getElementById('weapon-ammo').textContent = `${me.ammo} balles`;
+
+  const alive = remotePlayers.filter(p => p.alive).length;
+  document.getElementById('alive-count').textContent = `${alive} survivant${alive!==1?'s':''}`;
+}
+
+function updateCrosshair() {
+  const ch = document.getElementById('crosshair');
+  ch.style.left = mouseX + 'px';
+  ch.style.top = mouseY + 'px';
+}
+
+connect();
+</script>
+</body>
+</html>
