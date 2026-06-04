@@ -2,7 +2,7 @@
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
-<title>BUNSNITE</title>
+<title>BattleJS</title>
 <link href="https://fonts.googleapis.com/css2?family=Burbank+Big+Condensed:wght@700&family=Fredoka+One&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
@@ -144,7 +144,7 @@ canvas{display:block;position:absolute;top:0;left:0}
   <div id="menuBg"></div>
   <div id="menuBgNoise"></div>
   <div class="menu-content">
-    <div class="game-logo">BUNSNITE</div>
+    <div class="game-logo">BATTLEJS</div>
     <div class="game-tagline">Battle Royale · 10 joueurs · v5</div>
     <div class="menu-btn-group">
       <button class="menu-btn menu-btn-play" onclick="showNameOverlay()">🎮 JOUER</button>
@@ -152,7 +152,7 @@ canvas{display:block;position:absolute;top:0;left:0}
     </div>
   </div>
   <div class="menu-deco"></div>
-  <div class="menu-version">BUNSNITE v7 — Vote de map · 3 maps · Bus system</div>
+  <div class="menu-version">BattleJS v7 — Vote de map · 3 maps · Bus system</div>
 </div>
 
 <!-- ── NAME INPUT ── -->
@@ -167,7 +167,7 @@ canvas{display:block;position:absolute;top:0;left:0}
 
 <!-- ── LOBBY ── -->
 <div id="screenLobby">
-  <div class="lobby-logo">BUNSNITE</div>
+  <div class="lobby-logo">BATTLEJS</div>
   <div class="lobby-sub">Lobby · Vote de map</div>
   <div class="lobby-card">
     <h2>Joueurs connectés</h2>
@@ -295,7 +295,136 @@ const SFX={
   footstep:()=>{playNoise(0.04,0.06,500);},
 };
 let audioStarted=false;
-function startAudio(){if(!audioStarted){AC.resume();audioStarted=true;}}
+function startAudio(){if(!audioStarted){AC.resume();audioStarted=true;startAmbience();}}
+
+// ── AMBIENT SOUNDS ────────────────────────────────────────────
+let ambienceNodes=[];
+let ambienceTheme=null;
+
+function stopAmbience(){
+  ambienceNodes.forEach(n=>{try{n.stop();}catch(e){}});
+  ambienceNodes=[];
+}
+
+function startAmbience(){
+  stopAmbience();
+  ambienceTheme=currentThemeName;
+  const t=currentThemeName||'';
+  if(t.includes('Ville')||t.includes('city'))playAmbientCity();
+  else if(t.includes('sert')||t.includes('Desert')||t.includes('Désert'))playAmbientDesert();
+  else if(t.includes('Tokyo')||t.includes('Néon')||t.includes('Neon'))playAmbientTokyo();
+  else playAmbientCity(); // fallback
+}
+
+function makeLoopNoise(freqLow, freqHigh, vol, loopDuration){
+  // Creates looping filtered noise
+  function oneLoop(){
+    try{
+      const bufSize=AC.sampleRate*loopDuration;
+      const buf=AC.createBuffer(1,bufSize,AC.sampleRate);
+      const data=buf.getChannelData(0);
+      for(let i=0;i<bufSize;i++)data[i]=(Math.random()*2-1);
+      const src=AC.createBufferSource();
+      src.buffer=buf;
+      const bpf=AC.createBiquadFilter();
+      bpf.type='bandpass';
+      bpf.frequency.value=(freqLow+freqHigh)/2;
+      bpf.Q.value=0.8;
+      const gain=AC.createGain();
+      gain.gain.value=vol;
+      src.connect(bpf);bpf.connect(gain);gain.connect(AC.destination);
+      src.start();
+      ambienceNodes.push(src);
+      src.onended=()=>{
+        // remove from array
+        const idx=ambienceNodes.indexOf(src);
+        if(idx>-1)ambienceNodes.splice(idx,1);
+        oneLoop(); // loop
+      };
+      src.stop(AC.currentTime+loopDuration);
+    }catch(e){}
+  }
+  oneLoop();
+}
+
+function makeLoopTone(freq, type, vol, period){
+  // LFO-like repeating tone
+  function oneCycle(){
+    try{
+      const osc=AC.createOscillator();
+      const gain=AC.createGain();
+      osc.connect(gain);gain.connect(AC.destination);
+      osc.type=type; osc.frequency.value=freq;
+      gain.gain.setValueAtTime(0,AC.currentTime);
+      gain.gain.linearRampToValueAtTime(vol,AC.currentTime+period*0.3);
+      gain.gain.linearRampToValueAtTime(0,AC.currentTime+period);
+      osc.start();osc.stop(AC.currentTime+period);
+      ambienceNodes.push(osc);
+      osc.onended=()=>{
+        const idx=ambienceNodes.indexOf(osc);if(idx>-1)ambienceNodes.splice(idx,1);
+        setTimeout(oneCycle,200+Math.random()*period*2000);
+      };
+    }catch(e){}
+  }
+  oneCycle();
+}
+
+function playAmbientCity(){
+  // Ville: rumble de trafic lointain + vent doux
+  makeLoopNoise(60,200,0.04,4);        // trafic grave
+  makeLoopNoise(300,600,0.018,3);       // bruit de fond urbain
+  makeLoopNoise(1200,2400,0.008,2);     // vent léger
+  // Klaxon lointain occasionnel
+  setInterval(()=>{
+    if(Math.random()<0.3&&ambienceNodes.length>0){
+      try{
+        const o=AC.createOscillator();const g=AC.createGain();
+        o.connect(g);g.connect(AC.destination);
+        o.type='sawtooth';o.frequency.value=280+Math.random()*80;
+        g.gain.setValueAtTime(0,AC.currentTime);
+        g.gain.linearRampToValueAtTime(0.025,AC.currentTime+0.05);
+        g.gain.linearRampToValueAtTime(0,AC.currentTime+0.4);
+        o.start();o.stop(AC.currentTime+0.4);
+        ambienceNodes.push(o);
+      }catch(e){}
+    }
+  },6000);
+}
+
+function playAmbientDesert(){
+  // Désert: vent fort + sable + silence + cigales
+  makeLoopNoise(80,180,0.035,5);        // vent grave
+  makeLoopNoise(2000,4000,0.015,2);     // sable / vent aigu
+  makeLoopNoise(400,800,0.01,3);        // ambiance milieu
+  // Cigale/grillon
+  makeLoopTone(3200,'square',0.008,0.06);
+  makeLoopTone(2800,'square',0.006,0.08);
+}
+
+function playAmbientTokyo(){
+  // Tokyo néon: drone électronique + basses synthétiques + pulsations
+  makeLoopNoise(40,100,0.05,4);         // sub-bass drone
+  makeLoopNoise(500,900,0.012,3);       // buzz électronique
+  // Pulsation rythmique lente
+  makeLoopTone(55,'sawtooth',0.04,0.5);
+  makeLoopTone(110,'sine',0.025,1.0);
+  // Arp neon
+  const neonFreqs=[440,554,659,880];
+  let nfi=0;
+  setInterval(()=>{
+    if(ambienceNodes.length>0){
+      try{
+        const o=AC.createOscillator();const g=AC.createGain();
+        o.connect(g);g.connect(AC.destination);
+        o.type='triangle';o.frequency.value=neonFreqs[nfi%neonFreqs.length];nfi++;
+        g.gain.setValueAtTime(0.018,AC.currentTime);
+        g.gain.linearRampToValueAtTime(0,AC.currentTime+0.15);
+        o.start();o.stop(AC.currentTime+0.15);
+        ambienceNodes.push(o);
+      }catch(e){}
+    }
+  },800);
+}
 
 // ── Canvas setup ─────────────────────────────────────────────
 const canvas=document.getElementById('c');
@@ -367,35 +496,37 @@ document.addEventListener('wheel',e=>{
 
 document.addEventListener('keydown',e=>{
   startAudio();
-  if(gameState==='bus'){if(e.code==='Space')jumpFromBus();e.preventDefault();return;}
+  if(gameState==='bus'){if(e.code==='Space'||e.key===' ')jumpFromBus();e.preventDefault();return;}
   if(gameState!=='playing')return;
-  // ZQSD layout: Z=haut, Q=gauche, S=bas, D=droite
-  if(e.code==='KeyZ')inputs.up=true;
-  if(e.code==='KeyS')inputs.down=true;
-  if(e.code==='KeyQ')inputs.left=true;
-  if(e.code==='KeyD')inputs.right=true;
+  // e.key reflects the actual character on the key (works on AZERTY)
+  const k=e.key.toLowerCase();
+  if(k==='z')inputs.up=true;
+  if(k==='s')inputs.down=true;
+  if(k==='q')inputs.left=true;
+  if(k==='d')inputs.right=true;
   // Arrow keys as fallback
-  if(e.code==='ArrowUp')inputs.up=true;
-  if(e.code==='ArrowDown')inputs.down=true;
-  if(e.code==='ArrowLeft')inputs.left=true;
-  if(e.code==='ArrowRight')inputs.right=true;
-  if(e.code==='KeyE')inputs.interact=true;
-  if(e.code==='KeyG')inputs.drop=true;
-  if(e.code==='Digit1')inputs.slot=0;
-  if(e.code==='Digit2')inputs.slot=1;
-  if(e.code==='Digit3')inputs.slot=2;
-  if(e.code==='Digit4')inputs.slot=3;
+  if(e.key==='ArrowUp')inputs.up=true;
+  if(e.key==='ArrowDown')inputs.down=true;
+  if(e.key==='ArrowLeft')inputs.left=true;
+  if(e.key==='ArrowRight')inputs.right=true;
+  if(k==='e')inputs.interact=true;
+  if(k==='g')inputs.drop=true;
+  if(e.key==='1')inputs.slot=0;
+  if(e.key==='2')inputs.slot=1;
+  if(e.key==='3')inputs.slot=2;
+  if(e.key==='4')inputs.slot=3;
   e.preventDefault();
 });
 document.addEventListener('keyup',e=>{
-  if(e.code==='KeyZ')inputs.up=false;
-  if(e.code==='KeyS')inputs.down=false;
-  if(e.code==='KeyQ')inputs.left=false;
-  if(e.code==='KeyD')inputs.right=false;
-  if(e.code==='ArrowUp')inputs.up=false;
-  if(e.code==='ArrowDown')inputs.down=false;
-  if(e.code==='ArrowLeft')inputs.left=false;
-  if(e.code==='ArrowRight')inputs.right=false;
+  const k=e.key.toLowerCase();
+  if(k==='z')inputs.up=false;
+  if(k==='s')inputs.down=false;
+  if(k==='q')inputs.left=false;
+  if(k==='d')inputs.right=false;
+  if(e.key==='ArrowUp')inputs.up=false;
+  if(e.key==='ArrowDown')inputs.down=false;
+  if(e.key==='ArrowLeft')inputs.left=false;
+  if(e.key==='ArrowRight')inputs.right=false;
 });
 
 // ── WebSocket ─────────────────────────────────────────────────
@@ -419,7 +550,7 @@ function handleMsg(msg){
     currentThemeName=msg.map.themeName||'Map';
     gameState='bus';myInBus=true;
     showBusScreen();
-    setTimeout(()=>startPlayingHUD(),500);
+    setTimeout(()=>{startPlayingHUD();startAmbience();},500);
   }
   if(msg.type==='gameState'){
     rPlayers=msg.players;rBullets=msg.bullets;
@@ -437,7 +568,7 @@ function handleMsg(msg){
     // rendering handled by RAF loop
   }
   if(msg.type==='playerDied'){addKillFeed(msg);if(msg.id===myId)SFX.death();}
-  if(msg.type==='gameOver'){gameState='ended';showGameOver(msg);}
+  if(msg.type==='gameOver'){gameState='ended';stopAmbience();showGameOver(msg);}
 }
 
 // ── UI Functions ──────────────────────────────────────────────
