@@ -2,7 +2,7 @@
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
-<title>BattleJS</title>
+<title>Bunsnite</title>
 <link href="https://fonts.googleapis.com/css2?family=Burbank+Big+Condensed:wght@700&family=Fredoka+One&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
@@ -144,7 +144,7 @@ canvas{display:block;position:absolute;top:0;left:0}
   <div id="menuBg"></div>
   <div id="menuBgNoise"></div>
   <div class="menu-content">
-    <div class="game-logo">BATTLEJS</div>
+    <div class="game-logo">BUNSNITE</div>
     <div class="game-tagline">Battle Royale · 10 joueurs · v5</div>
     <div class="menu-btn-group">
       <button class="menu-btn menu-btn-play" onclick="showNameOverlay()">🎮 JOUER</button>
@@ -152,7 +152,7 @@ canvas{display:block;position:absolute;top:0;left:0}
     </div>
   </div>
   <div class="menu-deco"></div>
-  <div class="menu-version">BattleJS v7 — Vote de map · 3 maps · Bus system</div>
+  <div class="menu-version">Bunsnite v7 — Vote de map · 3 maps · Bus system</div>
 </div>
 
 <!-- ── NAME INPUT ── -->
@@ -167,7 +167,7 @@ canvas{display:block;position:absolute;top:0;left:0}
 
 <!-- ── LOBBY ── -->
 <div id="screenLobby">
-  <div class="lobby-logo">BATTLEJS</div>
+  <div class="lobby-logo">BUNSNITE</div>
   <div class="lobby-sub">Lobby · Vote de map</div>
   <div class="lobby-card">
     <h2>Joueurs connectés</h2>
@@ -270,161 +270,11 @@ canvas{display:block;position:absolute;top:0;left:0}
 
 <script>
 // ── Audio ─────────────────────────────────────────────────────
-const AC = new (window.AudioContext||window.webkitAudioContext)();
-function playTone(f,t,tp,v=0.3,sf=null){try{const o=AC.createOscillator(),g=AC.createGain();o.connect(g);g.connect(AC.destination);o.type=tp;sf?(o.frequency.setValueAtTime(sf,AC.currentTime),o.frequency.exponentialRampToValueAtTime(f,AC.currentTime+t)):o.frequency.setValueAtTime(f,AC.currentTime);g.gain.setValueAtTime(v,AC.currentTime);g.gain.exponentialRampToValueAtTime(0.001,AC.currentTime+t);o.start();o.stop(AC.currentTime+t);}catch(e){}}
-function playNoise(d,v=0.2,ff=2000){try{const b=AC.createBuffer(1,AC.sampleRate*d,AC.sampleRate),dt=b.getChannelData(0);for(let i=0;i<dt.length;i++)dt[i]=Math.random()*2-1;const s=AC.createBufferSource();s.buffer=b;const f=AC.createBiquadFilter();f.type='lowpass';f.frequency.value=ff;const g=AC.createGain();g.gain.setValueAtTime(v,AC.currentTime);g.gain.exponentialRampToValueAtTime(0.001,AC.currentTime+d);s.connect(f);f.connect(g);g.connect(AC.destination);s.start();s.stop(AC.currentTime+d);}catch(e){}}
-const SFX={
-  shoot_pistol:()=>{playNoise(0.08,0.35,3000);playTone(180,'square',0.06,0.15);},
-  shoot_smg:()=>{playNoise(0.06,0.28,4000);playTone(220,'sawtooth',0.05,0.1);},
-  shoot_shotgun:()=>{playNoise(0.18,0.55,1200);playTone(90,'square',0.15,0.25);},
-  shoot_rifle:()=>{playNoise(0.22,0.6,5000);playTone(120,'sawtooth',0.2,0.3);},
-  shoot_burst:()=>{playNoise(0.07,0.32,3500);},
-  shoot_rocket:()=>{playNoise(0.35,0.7,800);playTone(60,'sawtooth',0.3,0.4);},
-  shoot_minigun:()=>{playNoise(0.05,0.22,3800);},
-  empty:()=>{playTone(200,'square',0.05,0.08);},
-  fist:()=>{playNoise(0.08,0.3,800);playTone(150,'square',0.06,0.1);},
-  heal:()=>{playTone(440,'sine',0.1,0.2);playTone(660,'sine',0.1,0.15);},
-  shield:()=>{playTone(500,'sine',0.1,0.2);playTone(700,'sine',0.12,0.2);},
-  ammo:()=>{playTone(330,'triangle',0.08,0.15);},
-  pickup_weapon:()=>{playTone(300,'triangle',0.06,0.12);playTone(450,'triangle',0.08,0.15);},
-  explosion:()=>{playNoise(0.5,0.8,600);playTone(50,'sawtooth',0.4,0.5);},
-  hit_taken:()=>{playNoise(0.1,0.4,1500);},
-  death:()=>{playNoise(0.6,0.5,800);playTone(100,'sawtooth',0.5,0.3,200);},
-  jump_bus:()=>{playTone(300,'sine',0.2,0.3,200);},
-  victory:()=>{[523,659,784,1047].forEach((f,i)=>setTimeout(()=>playTone(f,'sine',0.3,0.3),i*120));},
-  footstep:()=>{playNoise(0.04,0.06,500);},
-};
-let audioStarted=false;
-function startAudio(){if(!audioStarted){AC.resume();audioStarted=true;startAmbience();}}
-
-// ── AMBIENT SOUNDS ────────────────────────────────────────────
-let ambienceNodes=[];
-let ambienceTheme=null;
-
-function stopAmbience(){
-  ambienceNodes.forEach(n=>{try{n.stop();}catch(e){}});
-  ambienceNodes=[];
-}
-
-function startAmbience(){
-  stopAmbience();
-  ambienceTheme=currentThemeName;
-  const t=currentThemeName||'';
-  if(t.includes('Ville')||t.includes('city'))playAmbientCity();
-  else if(t.includes('sert')||t.includes('Desert')||t.includes('Désert'))playAmbientDesert();
-  else if(t.includes('Tokyo')||t.includes('Néon')||t.includes('Neon'))playAmbientTokyo();
-  else playAmbientCity(); // fallback
-}
-
-function makeLoopNoise(freqLow, freqHigh, vol, loopDuration){
-  // Creates looping filtered noise
-  function oneLoop(){
-    try{
-      const bufSize=AC.sampleRate*loopDuration;
-      const buf=AC.createBuffer(1,bufSize,AC.sampleRate);
-      const data=buf.getChannelData(0);
-      for(let i=0;i<bufSize;i++)data[i]=(Math.random()*2-1);
-      const src=AC.createBufferSource();
-      src.buffer=buf;
-      const bpf=AC.createBiquadFilter();
-      bpf.type='bandpass';
-      bpf.frequency.value=(freqLow+freqHigh)/2;
-      bpf.Q.value=0.8;
-      const gain=AC.createGain();
-      gain.gain.value=vol;
-      src.connect(bpf);bpf.connect(gain);gain.connect(AC.destination);
-      src.start();
-      ambienceNodes.push(src);
-      src.onended=()=>{
-        // remove from array
-        const idx=ambienceNodes.indexOf(src);
-        if(idx>-1)ambienceNodes.splice(idx,1);
-        oneLoop(); // loop
-      };
-      src.stop(AC.currentTime+loopDuration);
-    }catch(e){}
-  }
-  oneLoop();
-}
-
-function makeLoopTone(freq, type, vol, period){
-  // LFO-like repeating tone
-  function oneCycle(){
-    try{
-      const osc=AC.createOscillator();
-      const gain=AC.createGain();
-      osc.connect(gain);gain.connect(AC.destination);
-      osc.type=type; osc.frequency.value=freq;
-      gain.gain.setValueAtTime(0,AC.currentTime);
-      gain.gain.linearRampToValueAtTime(vol,AC.currentTime+period*0.3);
-      gain.gain.linearRampToValueAtTime(0,AC.currentTime+period);
-      osc.start();osc.stop(AC.currentTime+period);
-      ambienceNodes.push(osc);
-      osc.onended=()=>{
-        const idx=ambienceNodes.indexOf(osc);if(idx>-1)ambienceNodes.splice(idx,1);
-        setTimeout(oneCycle,200+Math.random()*period*2000);
-      };
-    }catch(e){}
-  }
-  oneCycle();
-}
-
-function playAmbientCity(){
-  // Ville: rumble de trafic lointain + vent doux
-  makeLoopNoise(60,200,0.04,4);        // trafic grave
-  makeLoopNoise(300,600,0.018,3);       // bruit de fond urbain
-  makeLoopNoise(1200,2400,0.008,2);     // vent léger
-  // Klaxon lointain occasionnel
-  setInterval(()=>{
-    if(Math.random()<0.3&&ambienceNodes.length>0){
-      try{
-        const o=AC.createOscillator();const g=AC.createGain();
-        o.connect(g);g.connect(AC.destination);
-        o.type='sawtooth';o.frequency.value=280+Math.random()*80;
-        g.gain.setValueAtTime(0,AC.currentTime);
-        g.gain.linearRampToValueAtTime(0.025,AC.currentTime+0.05);
-        g.gain.linearRampToValueAtTime(0,AC.currentTime+0.4);
-        o.start();o.stop(AC.currentTime+0.4);
-        ambienceNodes.push(o);
-      }catch(e){}
-    }
-  },6000);
-}
-
-function playAmbientDesert(){
-  // Désert: vent fort + sable + silence + cigales
-  makeLoopNoise(80,180,0.035,5);        // vent grave
-  makeLoopNoise(2000,4000,0.015,2);     // sable / vent aigu
-  makeLoopNoise(400,800,0.01,3);        // ambiance milieu
-  // Cigale/grillon
-  makeLoopTone(3200,'square',0.008,0.06);
-  makeLoopTone(2800,'square',0.006,0.08);
-}
-
-function playAmbientTokyo(){
-  // Tokyo néon: drone électronique + basses synthétiques + pulsations
-  makeLoopNoise(40,100,0.05,4);         // sub-bass drone
-  makeLoopNoise(500,900,0.012,3);       // buzz électronique
-  // Pulsation rythmique lente
-  makeLoopTone(55,'sawtooth',0.04,0.5);
-  makeLoopTone(110,'sine',0.025,1.0);
-  // Arp neon
-  const neonFreqs=[440,554,659,880];
-  let nfi=0;
-  setInterval(()=>{
-    if(ambienceNodes.length>0){
-      try{
-        const o=AC.createOscillator();const g=AC.createGain();
-        o.connect(g);g.connect(AC.destination);
-        o.type='triangle';o.frequency.value=neonFreqs[nfi%neonFreqs.length];nfi++;
-        g.gain.setValueAtTime(0.018,AC.currentTime);
-        g.gain.linearRampToValueAtTime(0,AC.currentTime+0.15);
-        o.start();o.stop(AC.currentTime+0.15);
-        ambienceNodes.push(o);
-      }catch(e){}
-    }
-  },800);
-}
+// Sons désactivés
+const SFX={};
+function startAudio(){}
+function stopAmbience(){}
+function startAmbience(){}
 
 // ── Canvas setup ─────────────────────────────────────────────
 const canvas=document.getElementById('c');
