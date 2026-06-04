@@ -234,15 +234,18 @@ function generateMap(themeKey) {
 
 // ── BUS ────────────────────────────────────────────────────────
 function makeBus(MAP_W, MAP_H) {
-  // Bus flies diagonally across the map
-  const startX = 100, startY = 100;
-  const endX = MAP_W - 100, endY = MAP_H - 100;
+  // Bus flies horizontally across top of map (random Y), then diagonal
+  const angle = (Math.random() * 0.4 + 0.1) * Math.PI; // roughly diagonal
+  const startX = -100;
+  const startY = 400 + Math.random() * (MAP_H - 800);
+  const endX = MAP_W + 100;
+  const endY = startY + (Math.random() - 0.5) * MAP_H * 0.5;
   return {
     x: startX, y: startY,
     startX, startY, endX, endY,
-    progress: 0, // 0..1
-    speed: 0.0018,
-    phase: 'flying', // flying | done
+    progress: 0,
+    speed: 0.00045, // slower = more time to choose where to drop
+    phase: 'flying',
   };
 }
 
@@ -258,12 +261,13 @@ let bus = null;
 let zone = { x:MAP_SIZE/2, y:MAP_SIZE/2, radius:MAP_SIZE*0.68 };
 let zonePhase=0, zoneTimer=0, zoneShrinking=false, zoneStartRadius=MAP_SIZE*0.68;
 
+// Zones much longer — parties ~15 minutes
 const ZONE_PHASES = [
-  {wait:60*35,shrink:60*28,scale:0.48},
-  {wait:60*25,shrink:60*22,scale:0.26},
-  {wait:60*18,shrink:60*18,scale:0.12},
-  {wait:60*12,shrink:60*12,scale:0.05},
-  {wait:60*6, shrink:60*10, scale:0.01},
+  {wait:60*70, shrink:60*45, scale:0.52},  // ~2min wait, ~45s shrink
+  {wait:60*55, shrink:60*40, scale:0.30},  // ~55s wait
+  {wait:60*45, shrink:60*35, scale:0.15},
+  {wait:60*35, shrink:60*30, scale:0.06},
+  {wait:60*20, shrink:60*25, scale:0.02},
 ];
 
 let mapThemeIndex = 0;
@@ -376,7 +380,20 @@ function tickGame() {
     if (p.inputs.right) mx+=1;
     if (mx&&my){mx*=0.707;my*=0.707;}
     p.isMoving=!!(mx||my);
-    p.x+=mx*PLAYER_SPEED; p.y+=my*PLAYER_SPEED;
+
+    // Velocity-based movement with acceleration and friction for smooth feel
+    const ACCEL = 1.2;
+    const FRICTION = 0.72;
+    const MAX_SPEED = PLAYER_SPEED;
+    if (!p.vx) p.vx = 0;
+    if (!p.vy) p.vy = 0;
+    p.vx = (p.vx + mx * ACCEL) * FRICTION;
+    p.vy = (p.vy + my * ACCEL) * FRICTION;
+    // Cap speed
+    const spd = Math.sqrt(p.vx*p.vx + p.vy*p.vy);
+    if (spd > MAX_SPEED) { p.vx = p.vx/spd*MAX_SPEED; p.vy = p.vy/spd*MAX_SPEED; }
+    p.x += p.vx; p.y += p.vy;
+
     p.angle=p.inputs.angle;
     resolveWalls(p);
     p.x=Math.max(PLAYER_RADIUS,Math.min(MAP_SIZE-PLAYER_RADIUS,p.x));

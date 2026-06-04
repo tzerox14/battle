@@ -293,13 +293,17 @@ let rPlayers=[],rBullets=[],rLoots=[],rExplosions=[],rBushes=[];
 let rZone={x:2400,y:2400,radius:3264};
 let rBus=null;
 let mapWalls=[],mapBuildings=[],MAP_W=4800,MAP_H=4800;
-let camX=0,camY=0,mouseX=W/2,mouseY=H/2,mouseDown=false;
+let camX=0,camY=0,targetCamX=0,targetCamY=0;
+let mouseX=W/2,mouseY=H/2,mouseDown=false;
 let inputs={up:false,down:false,left:false,right:false,shoot:false,angle:0,slot:-1,interact:false,drop:false,fist:false,jumpFromBus:false};
 let lastSent={},inputInterval;
 let particles=[],neonLines=[];
 let prevHp=100,prevShield=0;
 let inZone=true,footstepTimer=0;
 let currentTheme=MAP_THEMES_C.city,currentThemeName='🏙️ Ville';
+// Interpolated player positions for smooth rendering
+let interpPlayers={};
+let lastRenderTime=0;
 let myInBus=true;
 let neonFlicker=0;
 
@@ -367,15 +371,14 @@ function handleMsg(msg){
     rBus=msg.bus;
     if(msg.loots)rLoots=msg.loots;
     const me=rPlayers.find(p=>p.id===myId);
-    if(me&&me.inBus===false&&myInBus){myInBus=false;hideBusScreen();}
-    if(msg.sounds){
+    if(me&&me.inBus===false&&myInBus){myInBus=false;hideBusScreen();}    if(msg.sounds){
       msg.sounds.forEach(s=>{
         const dist=me?Math.sqrt((s.x-me.x)**2+(s.y-me.y)**2):0;
         if(s.pid===myId){if(SFX[s.sound])SFX[s.sound]();}
         else if(dist<700&&SFX[s.sound])SFX[s.sound]();
       });
     }
-    if(gameState==='playing'||gameState==='bus')renderFrame();
+    // rendering handled by RAF loop
   }
   if(msg.type==='playerDied'){addKillFeed(msg);if(msg.id===myId)SFX.death();}
   if(msg.type==='gameOver'){gameState='ended';showGameOver(msg);}
@@ -496,15 +499,46 @@ function addFloat(x,y,text,color){
 
 // ── RENDER ─────────────────────────────────────────────────────
 function renderFrame(){
+  const now=performance.now();
+  const dt=Math.min((now-lastRenderTime)/16.67,3); // delta in frames, capped
+  lastRenderTime=now;
+
   const me=rPlayers.find(p=>p.id===myId);
-  if(me&&!me.inBus){
-    camX=Math.max(0,Math.min(MAP_W-W,me.x-W/2));
-    camY=Math.max(0,Math.min(MAP_H-H,me.y-H/2));
-    updateHUD(me);
-    if(me.isMoving&&me.alive){footstepTimer++;if(footstepTimer%24===0)SFX.footstep();}
-    const dz=Math.sqrt((me.x-rZone.x)**2+(me.y-rZone.y)**2);
-    inZone=dz<rZone.radius;
-    document.getElementById('zone-warning').style.opacity=inZone?'0':'1';
+
+  // Smooth interpolation of all player positions
+  rPlayers.forEach(p=>{
+    if(!interpPlayers[p.id])interpPlayers[p.id]={x:p.x,y:p.y,angle:p.angle};
+    const ip=interpPlayers[p.id];
+    const lerpSpeed=0.25*dt;
+    ip.x+=(p.x-ip.x)*Math.min(lerpSpeed,1);
+    ip.y+=(p.y-ip.y)*Math.min(lerpSpeed,1);
+    // Smooth angle interpolation (handle wrap-around)
+    let da=p.angle-ip.angle;
+    if(da>Math.PI)da-=Math.PI*2;if(da<-Math.PI)da+=Math.PI*2;
+    ip.angle+=da*Math.min(lerpSpeed,1);
+  });
+
+  if(me){
+    if(me.inBus&&rBus&&rBus.phase!=='done'){
+      // Camera follows bus smoothly
+      targetCamX=Math.max(0,Math.min(MAP_W-W,rBus.x-W/2));
+      targetCamY=Math.max(0,Math.min(MAP_H-H,rBus.y-H/2));
+    } else if(!me.inBus){
+      const ip=interpPlayers[myId]||me;
+      targetCamX=Math.max(0,Math.min(MAP_W-W,ip.x-W/2));
+      targetCamY=Math.max(0,Math.min(MAP_H-H,ip.y-H/2));
+    }
+    // Smooth camera
+    camX+=(targetCamX-camX)*Math.min(0.18*dt,1);
+    camY+=(targetCamY-camY)*Math.min(0.18*dt,1);
+
+    if(!me.inBus){
+      updateHUD(me);
+      if(me.isMoving&&me.alive){footstepTimer++;if(footstepTimer%24===0)SFX.footstep();}
+      const dz=Math.sqrt((me.x-rZone.x)**2+(me.y-rZone.y)**2);
+      inZone=dz<rZone.radius;
+      document.getElementById('zone-warning').style.opacity=inZone?'0':'1';
+    }
   }
 
   ctx.clearRect(0,0,W,H);
@@ -516,14 +550,14 @@ function renderFrame(){
   drawExplosions();
   drawBullets();
   drawPlayers(me);
-  drawBushes(true); // draw bushes over players (but transparent for self)
+  drawBushes(true);
   drawBus();
   drawParticles();
   ctx.restore();
   drawMinimap();
   updateCrosshair(me);
 
-  particles=particles.filter(p=>{p.x+=p.vx;p.y+=p.vy;p.vy+=0.1;p.vx*=0.95;p.life-=0.04;return p.life>0;});
+  particles=particles.filter(p=>{p.x+=p.vx*dt;p.y+=p.vy*dt;p.vy+=0.1*dt;p.vx*=Math.pow(0.95,dt);p.life-=0.04*dt;return p.life>0;});
   neonFlicker=(neonFlicker+1)%60;
 
   // Loot popup
@@ -692,11 +726,15 @@ function drawPlayers(me){
     // Hide in bush (other players)
     if(p.id!==myId&&p.inBush){
       const meDist=me?Math.sqrt((me.x-p.x)**2+(me.y-p.y)**2):999;
-      if(meDist>80)return; // can't see enemy in bush
+      if(meDist>80)return;
     }
 
     const isMe=p.id===myId;
-    ctx.save();ctx.translate(p.x,p.y);
+    // Use interpolated position for smooth rendering
+    const ip=interpPlayers[p.id]||p;
+    const px=ip.x, py=ip.y, pAngle=ip.angle;
+
+    ctx.save();ctx.translate(px,py);
 
     // Shadow
     ctx.beginPath();ctx.ellipse(4,13,18,6,0,0,Math.PI*2);
@@ -712,19 +750,16 @@ function drawPlayers(me){
     ctx.lineWidth=isMe?3:2;ctx.stroke();
 
     // Eyes + gun/fist
-    ctx.save();ctx.rotate(p.angle);
-    // Eyes
+    ctx.save();ctx.rotate(pAngle);
     ctx.fillStyle='#fff';ctx.beginPath();ctx.ellipse(10,-5,5,6,0,0,Math.PI*2);ctx.fill();
     ctx.fillStyle='#1a252f';ctx.beginPath();ctx.arc(12,-5,3,0,Math.PI*2);ctx.fill();
     ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(13,-4,1,0,Math.PI*2);ctx.fill();
 
-    // Weapon or fist
     const activeItem=p.inventory&&p.inventory[p.activeSlot];
     if(activeItem&&WINFO[activeItem.type]){
       ctx.fillStyle='#2c3e50';ctx.beginPath();ctx.roundRect(15,-4,20,8,3);ctx.fill();
       ctx.fillStyle='#566573';ctx.beginPath();ctx.roundRect(28,-3,10,6,2);ctx.fill();
     } else {
-      // Fist animation
       const fistOff=p.fistAnim>0?Math.sin(p.fistAnim/12*Math.PI)*12:0;
       ctx.fillStyle='#f5cba7';
       ctx.beginPath();ctx.roundRect(16+fistOff,-6,14,12,4);ctx.fill();
@@ -768,43 +803,127 @@ function drawPlayers(me){
 
 function drawBus(){
   if(!rBus||rBus.phase==='done')return;
-  const bx=rBus.x,by=rBus.y;
-  ctx.save();ctx.translate(bx,by);
+  const bx=rBus.x, by=rBus.y;
+  // Compute flight angle
+  const dx=rBus.endX-rBus.startX, dy=rBus.endY-rBus.startY;
+  const angle=Math.atan2(dy,dx);
+  const now=Date.now();
 
-  // Bus trail
+  ctx.save();
+
+  // ── Contrail (long dotted path behind) ──
+  ctx.save();
+  ctx.setLineDash([12,14]);
+  ctx.strokeStyle='rgba(255,255,255,0.18)';
+  ctx.lineWidth=3;
   ctx.beginPath();
-  ctx.moveTo(rBus.startX-bx,rBus.startY-by);
-  ctx.lineTo(0,0);
-  ctx.strokeStyle='rgba(255,255,255,0.15)';
-  ctx.lineWidth=2;ctx.setLineDash([10,10]);ctx.stroke();ctx.setLineDash([]);
+  ctx.moveTo(rBus.startX,rBus.startY);
+  ctx.lineTo(bx,by);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  // Future path (dashed lighter)
+  ctx.strokeStyle='rgba(255,255,255,0.07)';
+  ctx.setLineDash([8,18]);
+  ctx.beginPath();
+  ctx.moveTo(bx,by);
+  ctx.lineTo(rBus.endX,rBus.endY);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.restore();
 
-  // Rope from bus
-  ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(0,30);
-  ctx.strokeStyle='rgba(200,200,200,0.6)';ctx.lineWidth=2;ctx.stroke();
+  // ── Translate + rotate bus ──
+  ctx.translate(bx,by);
+  ctx.rotate(angle);
 
-  // Bus body
-  ctx.fillStyle='#3498db';
-  ctx.beginPath();ctx.roundRect(-30,-15,60,28,6);ctx.fill();
-  ctx.fillStyle='#2980b9';
-  ctx.beginPath();ctx.roundRect(-30,-15,60,10,3);ctx.fill();
-  // Windows
-  ctx.fillStyle='rgba(200,240,255,0.8)';
-  [[-18,-10],[0,-10],[18,-10]].forEach(([wx,wy])=>{ctx.beginPath();ctx.roundRect(wx-6,wy,12,10,2);ctx.fill();});
-  // Text
-  ctx.fillStyle='#fff';ctx.font='bold 8px Inter';ctx.textAlign='center';
-  ctx.fillText('BATTLE BUS',0,4);
-
-  // Parachute
-  if(Object.values(rPlayers||[]).some(p=>p.inBus)){
-    ctx.fillStyle='rgba(241,196,15,0.9)';
-    ctx.beginPath();ctx.ellipse(0,-30,24,12,0,Math.PI,Math.PI*2);ctx.fill();
-    ctx.strokeStyle='rgba(243,156,18,0.8)';ctx.lineWidth=1.5;
-    [[-20,-20],[-10,-18],[0,-18],[10,-18],[20,-20]].forEach(([ex,ey])=>{
-      ctx.beginPath();ctx.moveTo(ex,ey);ctx.lineTo(0,-15);ctx.stroke();
-    });
+  // ── Parachute / balloon ──
+  const playersInBus=rPlayers.filter(p=>p.inBus);
+  if(playersInBus.length>0){
+    // Main balloon
+    const balloonColors=['#e74c3c','#f39c12','#e74c3c','#3498db'];
+    for(let i=0;i<4;i++){
+      ctx.fillStyle=balloonColors[i];
+      ctx.beginPath();
+      ctx.ellipse(-30+i*20,-55,16,22,0,0,Math.PI*2);
+      ctx.fill();
+      ctx.strokeStyle='rgba(0,0,0,0.2)';ctx.lineWidth=1;ctx.stroke();
+    }
+    // Balloon strings
+    ctx.strokeStyle='rgba(150,150,150,0.8)';ctx.lineWidth=1.5;
+    for(let i=0;i<4;i++){
+      ctx.beginPath();ctx.moveTo(-30+i*20,-33);ctx.lineTo(0,-18);ctx.stroke();
+    }
   }
 
+  // ── Bus shadow ──
+  ctx.fillStyle='rgba(0,0,0,0.2)';
+  ctx.beginPath();ctx.ellipse(4,12,52,10,0,0,Math.PI*2);ctx.fill();
+
+  // ── Bus body ──
+  // Main body
+  ctx.fillStyle='#2980b9';
+  ctx.beginPath();ctx.roundRect(-48,-18,96,36,8);ctx.fill();
+  // Top section (slightly lighter)
+  ctx.fillStyle='#3498db';
+  ctx.beginPath();ctx.roundRect(-48,-18,96,20,{upperLeft:8,upperRight:8,lowerLeft:0,lowerRight:0});ctx.fill();
+  // Bottom stripe
+  ctx.fillStyle='#1a6a9a';
+  ctx.beginPath();ctx.roundRect(-48,10,96,8,{upperLeft:0,upperRight:0,lowerLeft:8,lowerRight:8});ctx.fill();
+  // Yellow stripe
+  ctx.fillStyle='#f1c40f';
+  ctx.fillRect(-48,6,96,5);
+
+  // ── Windows ──
+  ctx.fillStyle='rgba(200,240,255,0.85)';
+  for(let i=0;i<5;i++){
+    const wx=-36+i*18;
+    ctx.beginPath();ctx.roundRect(wx,-13,13,11,3);ctx.fill();
+    // Window reflection
+    ctx.fillStyle='rgba(255,255,255,0.3)';
+    ctx.beginPath();ctx.roundRect(wx,-12,4,4,1);ctx.fill();
+    ctx.fillStyle='rgba(200,240,255,0.85)';
+  }
+
+  // ── Windshield ──
+  ctx.fillStyle='rgba(180,230,255,0.7)';
+  ctx.beginPath();ctx.roundRect(32,-12,14,14,{upperLeft:2,upperRight:8,lowerLeft:2,lowerRight:4});ctx.fill();
+
+  // ── Headlights ──
+  ctx.fillStyle='rgba(255,255,200,0.9)';
+  ctx.beginPath();ctx.ellipse(47,-5,5,4,0,0,Math.PI*2);ctx.fill();
+  ctx.beginPath();ctx.ellipse(47,5,5,4,0,0,Math.PI*2);ctx.fill();
+  // Headlight glow
+  const hlg=ctx.createRadialGradient(47,0,0,47,0,20);
+  hlg.addColorStop(0,'rgba(255,255,150,0.3)');hlg.addColorStop(1,'transparent');
+  ctx.beginPath();ctx.arc(47,0,20,0,Math.PI*2);ctx.fillStyle=hlg;ctx.fill();
+
+  // ── Engine exhaust ──
+  ctx.fillStyle='rgba(150,150,150,0.15)';
+  for(let i=0;i<3;i++){
+    const smoke=Math.sin(now/200+i)*6;
+    ctx.beginPath();ctx.arc(-50-i*12+smoke,Math.sin(now/300+i)*4,(3-i)*3,0,Math.PI*2);ctx.fill();
+  }
+
+  // ── Text ──
+  ctx.fillStyle='#fff';ctx.font='bold 9px Inter';ctx.textAlign='center';
+  ctx.fillText('BATTLE BUS',0,4);
+
+  // ── Outline ──
+  ctx.strokeStyle='rgba(0,0,0,0.3)';ctx.lineWidth=2;
+  ctx.beginPath();ctx.roundRect(-48,-18,96,36,8);ctx.stroke();
+
   ctx.restore();
+
+  // ── Players visible falling from bus ──
+  if(playersInBus.length>0){
+    ctx.save();
+    ctx.translate(bx,by);
+    // Show count badge
+    ctx.fillStyle='rgba(0,0,0,0.7)';
+    ctx.beginPath();ctx.roundRect(-18,-60,36,18,9);ctx.fill();
+    ctx.fillStyle='#f1c40f';ctx.font='bold 10px Inter';ctx.textAlign='center';
+    ctx.fillText(`✈ ${playersInBus.length}`,0,-47);
+    ctx.restore();
+  }
 }
 
 function drawParticles(){
@@ -889,6 +1008,14 @@ function updateCrosshair(me){
 }
 
 connect();
+
+// Continuous 60fps render loop — smooth even between server ticks
+// Also remove renderFrame call from handleMsg to avoid double-render
+function gameRenderLoop(){
+  requestAnimationFrame(gameRenderLoop);
+  if(gameState==='playing'||gameState==='bus') renderFrame();
+}
+gameRenderLoop();
 </script>
 </body>
 </html>
