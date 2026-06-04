@@ -273,6 +273,27 @@ const ZONE_PHASES = [
 let mapThemeIndex = 0;
 const THEME_KEYS = Object.keys(MAP_THEMES);
 
+// ── VOTE SYSTEM ───────────────────────────────────────────────
+let mapVotes = {}; // playerId -> themeKey
+
+function getVoteCounts() {
+  const counts = {};
+  THEME_KEYS.forEach(k => counts[k] = 0);
+  Object.values(mapVotes).forEach(v => { if (counts[v] !== undefined) counts[v]++; });
+  return counts;
+}
+
+function getWinningMap() {
+  const counts = getVoteCounts();
+  let best = THEME_KEYS[0], bestCount = -1;
+  THEME_KEYS.forEach(k => { if (counts[k] > bestCount) { bestCount = counts[k]; best = k; } });
+  return best;
+}
+
+function broadcastVotes() {
+  broadcast({ type: 'voteUpdate', votes: getVoteCounts(), playerVotes: mapVotes });
+}
+
 function makePlayer(id, name, colorIdx) {
   return {
     id, name,
@@ -581,8 +602,8 @@ function serializePlayers(){
 
 function startGame(){
   gameState='playing';
-  const themeKey=THEME_KEYS[mapThemeIndex%THEME_KEYS.length];
-  mapThemeIndex++;
+  const themeKey = getWinningMap();
+  mapVotes = {}; // reset votes
   mapData=generateMap(themeKey);
   zone={x:MAP_SIZE/2,y:MAP_SIZE/2,radius:MAP_SIZE*0.68};
   zonePhase=0;zoneTimer=0;zoneShrinking=false;zoneStartRadius=MAP_SIZE*0.68;
@@ -613,18 +634,28 @@ wss.on('connection',ws=>{
       ws.playerId=playerId;
       ws.send(JSON.stringify({type:'joined',id:playerId,color:players[playerId].color}));
       broadcast({type:'lobby',players:Object.values(players).map(p=>({id:p.id,name:p.name,color:p.color})),gameState});
+      broadcastVotes();
+    }
+    if(msg.type==='voteMap'&&playerId&&gameState==='lobby'){
+      if(THEME_KEYS.includes(msg.theme)){
+        mapVotes[playerId]=msg.theme;
+        broadcastVotes();
+      }
     }
     if(msg.type==='startGame'&&gameState==='lobby')startGame();
     if(msg.type==='restart'&&gameState==='ended'){
-      gameState='lobby';colorIdx=0;players={};bullets=[];explosions=[];bus=null;
+      gameState='lobby';colorIdx=0;players={};bullets=[];explosions=[];bus=null;mapVotes={};
       broadcast({type:'lobby',players:[],gameState:'lobby'});
+      broadcastVotes();
     }
     if(msg.type==='inputs'&&playerId&&players[playerId])Object.assign(players[playerId].inputs,msg.inputs);
   });
   ws.on('close',()=>{
     if(playerId&&players[playerId]){
       delete players[playerId];
+      delete mapVotes[playerId];
       broadcast({type:'lobby',players:Object.values(players).map(p=>({id:p.id,name:p.name,color:p.color})),gameState});
+      broadcastVotes();
       if(gameState==='playing')checkWin();
     }
   });

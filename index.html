@@ -33,14 +33,29 @@ canvas{display:block;position:absolute;top:0;left:0}
 #screenLobby{position:absolute;top:0;left:0;width:100%;height:100%;display:none;flex-direction:column;align-items:center;justify-content:center;background:linear-gradient(160deg,#0d1b3e,#1a0a2e);z-index:25;pointer-events:all}
 .lobby-logo{font-family:'Fredoka One',cursive;font-size:52px;letter-spacing:4px;background:linear-gradient(135deg,#ff9900,#ff6600);-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:4px}
 .lobby-sub{font-size:11px;color:#555;letter-spacing:3px;text-transform:uppercase;margin-bottom:28px}
-.lobby-card{background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:16px;padding:24px;width:420px;max-width:95vw}
+.lobby-card{background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:16px;padding:24px;width:480px;max-width:95vw}
 .lobby-card h2{font-family:'Fredoka One',cursive;font-size:16px;color:#ddd;margin-bottom:12px}
-.plist{display:flex;flex-direction:column;gap:5px;max-height:180px;overflow-y:auto}
+.plist{display:flex;flex-direction:column;gap:5px;max-height:160px;overflow-y:auto}
 .pchip{display:flex;align-items:center;gap:9px;background:rgba(0,0,0,0.35);border:1px solid rgba(255,255,255,0.07);border-radius:8px;padding:7px 11px;font-size:12px;color:#ddd}
 .pdot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
 .ctrl-grid{display:grid;grid-template-columns:1fr 1fr;gap:4px;font-size:11px;color:#777;line-height:2;background:rgba(0,0,0,0.2);border-radius:8px;padding:8px 12px;margin-top:10px}
 .ky{background:rgba(255,255,255,0.1);border-radius:3px;padding:1px 6px;font-size:10px;color:#bbb;font-family:monospace}
 .status-line{font-size:11px;color:#444;text-align:center;margin-top:8px}
+
+/* ── MAP VOTE ── */
+.vote-section{margin-top:14px}
+.vote-title{font-size:11px;color:#888;text-transform:uppercase;letter-spacing:2px;margin-bottom:10px;text-align:center}
+.vote-maps{display:flex;gap:8px;justify-content:center}
+.vote-map-btn{flex:1;background:rgba(0,0,0,0.4);border:2px solid rgba(255,255,255,0.1);border-radius:12px;padding:10px 8px;cursor:pointer;text-align:center;transition:all .15s;position:relative;overflow:hidden}
+.vote-map-btn:hover{border-color:rgba(255,150,0,0.5);background:rgba(255,150,0,0.08)}
+.vote-map-btn.my-vote{border-color:#ff9900;background:rgba(255,153,0,0.18);box-shadow:0 0 12px rgba(255,153,0,0.3)}
+.vote-map-btn.leading{border-color:#2ecc71}
+.vote-map-icon{font-size:26px;display:block;margin-bottom:4px}
+.vote-map-name{font-size:10px;color:#ccc;font-weight:600;display:block;margin-bottom:6px}
+.vote-bar-bg{height:4px;background:rgba(255,255,255,0.1);border-radius:99px;overflow:hidden;margin-bottom:4px}
+.vote-bar-fill{height:100%;border-radius:99px;background:linear-gradient(90deg,#ff9900,#ff6600);transition:width .3s}
+.vote-count{font-size:11px;font-weight:700;color:#ff9900}
+.vote-winner-badge{position:absolute;top:6px;right:6px;background:#2ecc71;color:#fff;font-size:8px;font-weight:700;border-radius:4px;padding:2px 5px}
 
 /* ── NAME INPUT OVERLAY ── */
 #nameOverlay{position:absolute;top:0;left:0;width:100%;height:100%;display:flex;align-items:center;justify-content:center;z-index:35;background:rgba(0,0,0,0.7);backdrop-filter:blur(4px);pointer-events:all}
@@ -137,7 +152,7 @@ canvas{display:block;position:absolute;top:0;left:0}
     </div>
   </div>
   <div class="menu-deco"></div>
-  <div class="menu-version">BattleJS v5 — 3 maps · Bus system</div>
+  <div class="menu-version">BattleJS v7 — Vote de map · 3 maps · Bus system</div>
 </div>
 
 <!-- ── NAME INPUT ── -->
@@ -153,17 +168,47 @@ canvas{display:block;position:absolute;top:0;left:0}
 <!-- ── LOBBY ── -->
 <div id="screenLobby">
   <div class="lobby-logo">BATTLEJS</div>
-  <div class="lobby-sub">Lobby · En attente</div>
+  <div class="lobby-sub">Lobby · Vote de map</div>
   <div class="lobby-card">
     <h2>Joueurs connectés</h2>
     <div class="plist" id="playerList"></div>
+
+    <!-- MAP VOTE -->
+    <div class="vote-section">
+      <div class="vote-title">🗳️ Vote pour la map</div>
+      <div class="vote-maps">
+        <div class="vote-map-btn" id="vote-city" onclick="voteMap('city')">
+          <span class="vote-map-icon">🏙️</span>
+          <span class="vote-map-name">Ville</span>
+          <div class="vote-bar-bg"><div class="vote-bar-fill" id="vbar-city" style="width:0%"></div></div>
+          <span class="vote-count" id="vcnt-city">0 vote</span>
+        </div>
+        <div class="vote-map-btn" id="vote-desert" onclick="voteMap('desert')">
+          <span class="vote-map-icon">🏜️</span>
+          <span class="vote-map-name">Désert</span>
+          <div class="vote-bar-bg"><div class="vote-bar-fill" id="vbar-desert" style="width:0%"></div></div>
+          <span class="vote-count" id="vcnt-desert">0 vote</span>
+        </div>
+        <div class="vote-map-btn" id="vote-tokyo" onclick="voteMap('tokyo')">
+          <span class="vote-map-icon">🌆</span>
+          <span class="vote-map-name">Tokyo Néon</span>
+          <div class="vote-bar-bg"><div class="vote-bar-fill" id="vbar-tokyo" style="width:0%"></div></div>
+          <span class="vote-count" id="vcnt-tokyo">0 vote</span>
+        </div>
+      </div>
+    </div>
+
     <div class="ctrl-grid">
-      <div><span class="ky">ZQSD</span> Déplacer</div>
+      <div><span class="ky">Z</span> Avancer</div>
+      <div><span class="ky">S</span> Reculer</div>
+      <div><span class="ky">Q</span> Gauche</div>
+      <div><span class="ky">D</span> Droite</div>
       <div><span class="ky">Clic G</span> Tirer / Frapper</div>
-      <div><span class="ky">E</span> Ramasser</div>
+      <div><span class="ky">E</span> Ramasser loot</div>
       <div><span class="ky">G</span> Drop arme</div>
       <div><span class="ky">1-4</span> Changer arme</div>
       <div><span class="ky">Molette</span> Arme suiv.</div>
+      <div><span class="ky">Espace</span> Sauter du bus</div>
     </div>
     <button class="menu-btn menu-btn-play" style="margin-top:12px" onclick="startGame()">Lancer !</button>
     <div class="status-line" id="lobbyStatus">En attente...</div>
@@ -322,12 +367,18 @@ document.addEventListener('wheel',e=>{
 
 document.addEventListener('keydown',e=>{
   startAudio();
-  if(gameState==='bus'){if(e.code==='Space')jumpFromBus();return;}
+  if(gameState==='bus'){if(e.code==='Space')jumpFromBus();e.preventDefault();return;}
   if(gameState!=='playing')return;
-  if(e.code==='KeyZ'||e.code==='ArrowUp')inputs.up=true;
-  if(e.code==='KeyS'||e.code==='ArrowDown')inputs.down=true;
-  if(e.code==='KeyQ'||e.code==='ArrowLeft')inputs.left=true;
-  if(e.code==='KeyD'||e.code==='ArrowRight')inputs.right=true;
+  // ZQSD layout: Z=haut, Q=gauche, S=bas, D=droite
+  if(e.code==='KeyZ')inputs.up=true;
+  if(e.code==='KeyS')inputs.down=true;
+  if(e.code==='KeyQ')inputs.left=true;
+  if(e.code==='KeyD')inputs.right=true;
+  // Arrow keys as fallback
+  if(e.code==='ArrowUp')inputs.up=true;
+  if(e.code==='ArrowDown')inputs.down=true;
+  if(e.code==='ArrowLeft')inputs.left=true;
+  if(e.code==='ArrowRight')inputs.right=true;
   if(e.code==='KeyE')inputs.interact=true;
   if(e.code==='KeyG')inputs.drop=true;
   if(e.code==='Digit1')inputs.slot=0;
@@ -337,10 +388,14 @@ document.addEventListener('keydown',e=>{
   e.preventDefault();
 });
 document.addEventListener('keyup',e=>{
-  if(e.code==='KeyZ'||e.code==='ArrowUp')inputs.up=false;
-  if(e.code==='KeyS'||e.code==='ArrowDown')inputs.down=false;
-  if(e.code==='KeyQ'||e.code==='ArrowLeft')inputs.left=false;
-  if(e.code==='KeyD'||e.code==='ArrowRight')inputs.right=false;
+  if(e.code==='KeyZ')inputs.up=false;
+  if(e.code==='KeyS')inputs.down=false;
+  if(e.code==='KeyQ')inputs.left=false;
+  if(e.code==='KeyD')inputs.right=false;
+  if(e.code==='ArrowUp')inputs.up=false;
+  if(e.code==='ArrowDown')inputs.down=false;
+  if(e.code==='ArrowLeft')inputs.left=false;
+  if(e.code==='ArrowRight')inputs.right=false;
 });
 
 // ── WebSocket ─────────────────────────────────────────────────
@@ -356,6 +411,7 @@ function handleMsg(msg){
   if(msg.type==='init'){gameState=msg.gameState==='lobby'?'lobby':'menu';}
   if(msg.type==='joined'){myId=msg.id;myColor=msg.color;showLobby();}
   if(msg.type==='lobby'){updateLobby(msg.players);}
+  if(msg.type==='voteUpdate'){updateVoteUI(msg.votes,msg.playerVotes);}
   if(msg.type==='gameStart'){
     mapWalls=msg.map.walls;mapBuildings=msg.map.buildings||[];
     MAP_W=msg.map.w;MAP_H=msg.map.h;rLoots=msg.map.loots;rBushes=msg.map.bushes||[];
@@ -403,6 +459,45 @@ function updateLobby(players){
   players.forEach(p=>{const d=document.createElement('div');d.className='pchip';d.innerHTML=`<div class="pdot" style="background:${p.color}"></div><span>${p.name}${p.id===myId?' (toi)':''}</span>`;list.appendChild(d);});
   document.getElementById('lobbyStatus').textContent=`${players.length}/10 joueurs`;
 }
+
+let myVote=null;
+function voteMap(theme){
+  if(!ws||!myId)return;
+  myVote=theme;
+  ws.send(JSON.stringify({type:'voteMap',theme}));
+  // Immediate local feedback
+  ['city','desert','tokyo'].forEach(k=>{
+    const btn=document.getElementById('vote-'+k);
+    if(btn)btn.classList.toggle('my-vote',k===theme);
+  });
+}
+
+function updateVoteUI(votes,playerVotes){
+  const themes=['city','desert','tokyo'];
+  const total=Math.max(1,Object.values(votes).reduce((a,b)=>a+b,0));
+  let maxVotes=-1,winner=null;
+  themes.forEach(k=>{if(votes[k]>maxVotes){maxVotes=votes[k];winner=k;}});
+
+  themes.forEach(k=>{
+    const bar=document.getElementById('vbar-'+k);
+    const cnt=document.getElementById('vcnt-'+k);
+    const btn=document.getElementById('vote-'+k);
+    if(!bar||!cnt||!btn)return;
+    const v=votes[k]||0;
+    bar.style.width=(v/total*100)+'%';
+    cnt.textContent=v===0?'0 vote':`${v} vote${v>1?'s':''}`;
+    btn.classList.toggle('my-vote',playerVotes&&playerVotes[myId]===k);
+    btn.classList.toggle('leading',k===winner&&maxVotes>0);
+    // Winner badge
+    let badge=btn.querySelector('.vote-winner-badge');
+    if(k===winner&&maxVotes>0){
+      if(!badge){badge=document.createElement('div');badge.className='vote-winner-badge';badge.textContent='EN TÊTE';btn.appendChild(badge);}
+    } else {
+      if(badge)badge.remove();
+    }
+  });
+}
+
 function startGame(){ws.send(JSON.stringify({type:'startGame'}));}
 function restartGame(){ws.send(JSON.stringify({type:'restart'}));location.reload();}
 
