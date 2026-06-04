@@ -47,67 +47,60 @@ const LOOT_TYPES = {
 
 const RARITY_COLORS = { common:'#95a5a6', uncommon:'#2ecc71', rare:'#3498db', epic:'#9b59b6' };
 const PLAYER_COLORS = ['#e74c3c','#3498db','#2ecc71','#f39c12','#9b59b6','#1abc9c','#e67e22','#e91e63','#00bcd4','#cddc39'];
-const BUILDING_THEMES = [
-  {wall:'#c0392b',roof:'#922b21',win:'#e8d5b7'},{wall:'#2980b9',roof:'#1a5276',win:'#d6eaf8'},
-  {wall:'#27ae60',roof:'#1e8449',win:'#d5f5e3'},{wall:'#8e44ad',roof:'#6c3483',win:'#e8daef'},
-  {wall:'#d35400',roof:'#a04000',win:'#fad7a0'},{wall:'#17a589',roof:'#0e6655',win:'#d1f2eb'},
-];
 
-function generateMap() {
-  const walls = [];
+// ── MAP THEMES ─────────────────────────────────────────────────
+const MAP_THEMES = {
+  city: {
+    name:'Ville',
+    groundColors:['#3a3a3a','#404040'],
+    roadColor:'#2a2a2a',
+    roadMarkColor:'rgba(255,255,200,0.12)',
+    buildingThemes:[
+      {wall:'#c0392b',roof:'#922b21',win:'#e8d5b7'},{wall:'#2980b9',roof:'#1a5276',win:'#d6eaf8'},
+      {wall:'#27ae60',roof:'#1e8449',win:'#d5f5e3'},{wall:'#8e44ad',roof:'#6c3483',win:'#e8daef'},
+      {wall:'#d35400',roof:'#a04000',win:'#fad7a0'},{wall:'#17a589',roof:'#0e6655',win:'#d1f2eb'},
+    ],
+    rockColor:'#555',rockHighlight:'#777',
+  },
+  jungle: {
+    name:'Jungle',
+    groundColors:['#1a4a0a','#1e5510'],
+    roadColor:'#2d5016',
+    roadMarkColor:'rgba(100,200,80,0.08)',
+    buildingThemes:[
+      {wall:'#5d4037',roof:'#3e2723',win:'#bcaaa4'},{wall:'#4e342e',roof:'#3e2723',win:'#d7ccc8'},
+      {wall:'#558b2f',roof:'#33691e',win:'#dcedc8'},{wall:'#6d4c41',roof:'#4e342e',win:'#efebe9'},
+      {wall:'#2e7d32',roof:'#1b5e20',win:'#c8e6c9'},{wall:'#4caf50',roof:'#388e3c',win:'#f1f8e9'},
+    ],
+    rockColor:'#4a5e2a',rockHighlight:'#6a7e3a',
+  },
+  desert: {
+    name:'Désert',
+    groundColors:['#c9a96e','#d4b483'],
+    roadColor:'#b8965a',
+    roadMarkColor:'rgba(255,240,200,0.15)',
+    buildingThemes:[
+      {wall:'#d4a96a',roof:'#b8835a',win:'#fff8e1'},{wall:'#bcaaa4',roof:'#8d6e63',win:'#fbe9e7'},
+      {wall:'#e0c080',roof:'#c4a060',win:'#fff9c4'},{wall:'#a08050',roof:'#806030',win:'#fff8e1'},
+      {wall:'#c8a070',roof:'#a08050',win:'#fff3e0'},{wall:'#d4b896',roof:'#b89070',win:'#fbe9e7'},
+    ],
+    rockColor:'#b8965a',rockHighlight:'#d4aa70',
+  },
+};
+
+let currentMapTheme = 'city';
+let mapThemeIndex = 0;
+const MAP_THEME_KEYS = Object.keys(MAP_THEMES);
+
+function generateLoot(walls, MAP_W, MAP_H) {
   const loots = [];
-  const buildingMeta = [];
-  const T = 40;
-
-  walls.push({x:0,y:0,w:MAP_W,h:T,type:'border'});
-  walls.push({x:0,y:MAP_H-T,w:MAP_W,h:T,type:'border'});
-  walls.push({x:0,y:0,w:T,h:MAP_H,type:'border'});
-  walls.push({x:MAP_W-T,y:0,w:T,h:MAP_H,type:'border'});
-
-  const buildingDefs = [
-    {x:260,y:260,w:200,h:160},{x:700,y:180,w:140,h:220},{x:1150,y:120,w:220,h:180},
-    {x:1700,y:200,w:180,h:160},{x:2200,y:160,w:200,h:200},{x:2650,y:240,w:160,h:160},
-    {x:180,y:750,w:160,h:180},{x:580,y:680,w:220,h:120},{x:980,y:620,w:180,h:180},
-    {x:1400,y:680,w:140,h:220},{x:1820,y:620,w:200,h:160},{x:2220,y:680,w:180,h:180},
-    {x:2680,y:620,w:160,h:140},{x:260,y:1280,w:180,h:180},{x:680,y:1180,w:220,h:160},
-    {x:1080,y:1080,w:260,h:260},{x:1580,y:1180,w:180,h:180},{x:2080,y:1080,w:220,h:200},
-    {x:2580,y:1280,w:180,h:180},{x:180,y:1880,w:200,h:160},{x:580,y:1780,w:180,h:220},
-    {x:980,y:1680,w:220,h:180},{x:1480,y:1780,w:180,h:180},{x:1880,y:1680,w:220,h:160},
-    {x:2380,y:1780,w:180,h:220},{x:2780,y:1880,w:160,h:160},{x:260,y:2380,w:220,h:180},
-    {x:760,y:2280,w:180,h:220},{x:1260,y:2180,w:220,h:220},{x:1780,y:2280,w:180,h:180},
-    {x:2280,y:2380,w:220,h:180},{x:2780,y:2280,w:160,h:220},
-  ];
-
-  buildingDefs.forEach((b,i) => {
-    const theme = BUILDING_THEMES[i%BUILDING_THEMES.length];
-    buildingMeta.push({...b,theme,type:'building'});
-    const wt = T*0.6;
-    walls.push({x:b.x,y:b.y,w:b.w,h:wt,type:'wall',theme});
-    walls.push({x:b.x,y:b.y+b.h-wt,w:b.w,h:wt,type:'wall',theme});
-    walls.push({x:b.x,y:b.y,w:wt,h:b.h,type:'wall',theme});
-    walls.push({x:b.x+b.w-wt,y:b.y,w:wt,h:b.h,type:'wall',theme});
-  });
-
-  const rocks = [
-    {x:480,y:480,w:55,h:55},{x:880,y:360,w:60,h:45},{x:1480,y:420,w:50,h:65},
-    {x:1980,y:460,w:60,h:55},{x:2480,y:380,w:55,h:60},{x:380,y:1020,w:60,h:55},
-    {x:880,y:980,w:55,h:60},{x:1680,y:980,w:60,h:55},{x:2280,y:1020,w:55,h:60},
-    {x:480,y:1580,w:60,h:55},{x:1180,y:1480,w:55,h:65},{x:1980,y:1580,w:60,h:55},
-    {x:380,y:2080,w:60,h:55},{x:980,y:2080,w:55,h:60},{x:1680,y:2080,w:60,h:55},
-    {x:580,y:2680,w:60,h:55},{x:1580,y:2680,w:60,h:55},{x:2580,y:2680,w:60,h:55},
-  ];
-  rocks.forEach(r=>walls.push({...r,type:'rock'}));
-
-  // Loot generation
-  const lootKeys = Object.keys(LOOT_TYPES);
   const positions = [];
   for (let x=200;x<MAP_W-200;x+=220) for (let y=200;y<MAP_H-200;y+=220)
     positions.push([x+(Math.random()-0.5)*60, y+(Math.random()-0.5)*60]);
-
   positions.forEach(([x,y],i) => {
     const rnd = Math.random();
     let type;
-    if (rnd<0.18)      type='bandage';
+    if      (rnd<0.18) type='bandage';
     else if (rnd<0.26) type='medkit';
     else if (rnd<0.34) type='shield_sm';
     else if (rnd<0.38) type='shield_lg';
@@ -123,11 +116,126 @@ function generateMap() {
     else               type='rocket';
     loots.push({id:'l'+i,x,y,type,picked:false});
   });
-
-  return {walls,loots,buildings:buildingMeta};
+  return loots;
 }
 
-let mapData = generateMap();
+function generateMap(themeKey) {
+  const walls = [];
+  const buildingMeta = [];
+  const T = 40;
+  const theme = MAP_THEMES[themeKey] || MAP_THEMES.city;
+
+  walls.push({x:0,y:0,w:MAP_W,h:T,type:'border'});
+  walls.push({x:0,y:MAP_H-T,w:MAP_W,h:T,type:'border'});
+  walls.push({x:0,y:0,w:T,h:MAP_H,type:'border'});
+  walls.push({x:MAP_W-T,y:0,w:T,h:MAP_H,type:'border'});
+
+  // City: dense grid layout
+  // Jungle: scattered compounds
+  // Desert: sparse wide-open with sand dunes
+  let buildingDefs = [];
+
+  if (themeKey === 'city') {
+    buildingDefs = [
+      {x:260,y:260,w:200,h:160},{x:700,y:180,w:140,h:220},{x:1150,y:120,w:220,h:180},
+      {x:1700,y:200,w:180,h:160},{x:2200,y:160,w:200,h:200},{x:2650,y:240,w:160,h:160},
+      {x:180,y:750,w:160,h:180},{x:580,y:680,w:220,h:120},{x:980,y:620,w:180,h:180},
+      {x:1400,y:680,w:140,h:220},{x:1820,y:620,w:200,h:160},{x:2220,y:680,w:180,h:180},
+      {x:2680,y:620,w:160,h:140},{x:260,y:1280,w:180,h:180},{x:680,y:1180,w:220,h:160},
+      {x:1080,y:1080,w:260,h:260},{x:1580,y:1180,w:180,h:180},{x:2080,y:1080,w:220,h:200},
+      {x:2580,y:1280,w:180,h:180},{x:180,y:1880,w:200,h:160},{x:580,y:1780,w:180,h:220},
+      {x:980,y:1680,w:220,h:180},{x:1480,y:1780,w:180,h:180},{x:1880,y:1680,w:220,h:160},
+      {x:2380,y:1780,w:180,h:220},{x:2780,y:1880,w:160,h:160},{x:260,y:2380,w:220,h:180},
+      {x:760,y:2280,w:180,h:220},{x:1260,y:2180,w:220,h:220},{x:1780,y:2280,w:180,h:180},
+      {x:2280,y:2380,w:220,h:180},{x:2780,y:2280,w:160,h:220},
+    ];
+  } else if (themeKey === 'jungle') {
+    // Jungle: scattered compounds + thick vegetation walls
+    buildingDefs = [
+      // Top area - 3 compounds
+      {x:200,y:200,w:160,h:160},{x:420,y:220,w:120,h:100},{x:580,y:200,w:100,h:140},
+      {x:900,y:150,w:200,h:200},{x:1150,y:180,w:140,h:160},
+      {x:1600,y:160,w:180,h:180},{x:1830,y:200,w:120,h:120},{x:2050,y:150,w:160,h:200},
+      {x:2400,y:180,w:200,h:160},{x:2650,y:200,w:160,h:180},
+      // Middle belt
+      {x:160,y:700,w:180,h:300},{x:400,y:800,w:240,h:180},
+      {x:800,y:650,w:160,h:160},{x:1000,y:750,w:200,h:140},
+      {x:1400,y:700,w:160,h:200},{x:1620,y:680,w:200,h:160},
+      {x:2000,y:700,w:180,h:260},{x:2250,y:750,w:160,h:160},
+      {x:2600,y:680,w:180,h:200},
+      // Center fortress
+      {x:1100,y:1100,w:300,h:80},{x:1100,y:1420,w:300,h:80},
+      {x:1100,y:1100,w:80,h:400},{x:1320,y:1100,w:80,h:400},
+      // Lower compounds
+      {x:200,y:1700,w:160,h:200},{x:420,y:1750,w:140,h:160},
+      {x:800,y:1650,w:200,h:200},{x:1060,y:1700,w:160,h:160},
+      {x:1500,y:1680,w:180,h:180},{x:1740,y:1720,w:140,h:140},
+      {x:2100,y:1650,w:200,h:220},{x:2360,y:1700,w:160,h:160},
+      {x:2650,y:1680,w:180,h:200},
+      // Bottom
+      {x:300,y:2300,w:200,h:180},{x:700,y:2250,w:180,h:220},
+      {x:1150,y:2200,w:220,h:240},{x:1600,y:2250,w:180,h:200},
+      {x:2050,y:2280,w:200,h:180},{x:2500,y:2250,w:200,h:220},
+    ];
+  } else if (themeKey === 'desert') {
+    // Desert: big open spaces, few large structures, long walls for cover
+    buildingDefs = [
+      // Large ruins
+      {x:200,y:200,w:300,h:40},{x:200,y:200,w:40,h:200},{x:460,y:200,w:40,h:200},
+      {x:800,y:150,w:400,h:50},{x:800,y:150,w:50,h:250},{x:1150,y:150,w:50,h:250},
+      {x:1600,y:180,w:350,h:50},{x:1600,y:180,w:50,h:300},{x:1900,y:180,w:50,h:300},
+      {x:2300,y:150,w:300,h:50},{x:2300,y:150,w:50,h:280},{x:2550,y:150,w:50,h:280},
+      // Mid walls
+      {x:100,y:700,w:50,h:350},{x:350,y:750,w:300,h:50},{x:350,y:750,w:50,h:200},
+      {x:700,y:680,w:350,h:50},{x:700,y:680,w:50,h:300},
+      {x:1150,y:700,w:50,h:400},{x:1400,y:720,w:300,h:50},
+      {x:1800,y:680,w:50,h:350},{x:2050,y:700,w:350,h:50},
+      {x:2500,y:680,w:50,h:380},{x:2700,y:700,w:200,h:50},
+      // Center - oasis fort
+      {x:1300,y:1250,w:600,h:50},{x:1300,y:1900,w:600,h:50},
+      {x:1300,y:1250,w:50,h:700},{x:1850,y:1250,w:50,h:700},
+      {x:1550,y:1450,w:100,h:100},{x:1550,y:1650,w:100,h:100}, // inner covers
+      // Lower walls
+      {x:200,y:1600,w:50,h:300},{x:400,y:1700,w:280,h:50},
+      {x:750,y:1600,w:50,h:350},{x:900,y:1680,w:300,h:50},
+      {x:1150,y:1600,w:50,h:350},{x:2000,y:1600,w:50,h:350},
+      {x:2200,y:1680,w:300,h:50},{x:2600,y:1600,w:50,h:400},
+      // Bottom ruins
+      {x:200,y:2300,w:280,h:50},{x:200,y:2300,w:50,h:260},
+      {x:650,y:2250,w:50,h:300},{x:800,y:2400,w:350,h:50},
+      {x:1300,y:2280,w:400,h:50},{x:1300,y:2280,w:50,h:300},{x:1650,y:2280,w:50,h:300},
+      {x:2000,y:2250,w:50,h:350},{x:2200,y:2350,w:350,h:50},
+      {x:2600,y:2280,w:280,h:50},{x:2600,y:2280,w:50,h:300},
+    ];
+  }
+
+  buildingDefs.forEach((b,i) => {
+    const bt = theme.buildingThemes[i%theme.buildingThemes.length];
+    buildingMeta.push({...b,theme:bt,type:'building',mapTheme:themeKey});
+    const wt = T*0.6;
+    // For thin walls (deserts), just use full rect as wall
+    if (b.w<=50||b.h<=50) {
+      walls.push({x:b.x,y:b.y,w:b.w,h:b.h,type:'wall',theme:bt});
+    } else {
+      walls.push({x:b.x,y:b.y,w:b.w,h:wt,type:'wall',theme:bt});
+      walls.push({x:b.x,y:b.y+b.h-wt,w:b.w,h:wt,type:'wall',theme:bt});
+      walls.push({x:b.x,y:b.y,w:wt,h:b.h,type:'wall',theme:bt});
+      walls.push({x:b.x+b.w-wt,y:b.y,w:wt,h:b.h,type:'wall',theme:bt});
+    }
+  });
+
+  // Rocks / cover per theme
+  const rockGrid = [];
+  const spacing = themeKey==='desert'?400:260;
+  for (let x=300;x<MAP_W-300;x+=spacing) for (let y=300;y<MAP_H-300;y+=spacing)
+    if (Math.random()>0.55) rockGrid.push({x:x+(Math.random()-0.5)*80,y:y+(Math.random()-0.5)*80,w:50+Math.random()*30,h:45+Math.random()*30});
+  rockGrid.forEach(r=>walls.push({...r,type:'rock'}));
+
+  const loots = generateLoot(walls, MAP_W, MAP_H);
+  return {walls,loots,buildings:buildingMeta,theme:themeKey,themeName:theme.name};
+}
+
+let mapData = generateMap('city');
 let players = {};
 let bullets = [];
 let explosions = [];
@@ -284,22 +392,26 @@ function tickGame(){
           p.interactCooldown=15;
           picked=true;break;
         } else if(info.category==='weapon'){
+          const baseAmmo = WEAPONS[loot.type].ammo;
+          const maxAmmo  = WEAPONS[loot.type].maxAmmo * 3;
           const emptySlot=p.inventory.indexOf(null);
           if(emptySlot!==-1){
-            p.inventory[emptySlot]={type:loot.type,ammo:WEAPONS[loot.type].ammo};
-            if(p.ammo[loot.type]===undefined)p.ammo[loot.type]=WEAPONS[loot.type].ammo;
+            p.inventory[emptySlot]={type:loot.type};
+            // Always give base ammo on pickup, capped at max
+            p.ammo[loot.type]=Math.min((p.ammo[loot.type]||0)+baseAmmo, maxAmmo);
             loot.picked=true;
             p.sounds.push('pickup_weapon');
             p.interactCooldown=15;
             picked=true;break;
           } else {
-            // Swap with active
+            // Swap with active slot
             const old=p.inventory[p.activeSlot];
             if(old){
-              mapData.loots.push({id:'swap_'+Date.now(),x:p.x,y:p.y,type:old.type,picked:false});
+              mapData.loots.push({id:'swap_'+Date.now(),x:p.x+(Math.random()-0.5)*30,y:p.y+(Math.random()-0.5)*30,type:old.type,picked:false});
             }
-            p.inventory[p.activeSlot]={type:loot.type,ammo:WEAPONS[loot.type].ammo};
-            p.ammo[loot.type]=(p.ammo[loot.type]||0)+WEAPONS[loot.type].ammo;
+            p.inventory[p.activeSlot]={type:loot.type};
+            // Always give base ammo on pickup, capped at max
+            p.ammo[loot.type]=Math.min((p.ammo[loot.type]||0)+baseAmmo, maxAmmo);
             loot.picked=true;
             p.sounds.push('pickup_weapon');
             p.interactCooldown=15;
@@ -440,7 +552,10 @@ function serializePlayers(){
 
 function startGame(){
   gameState='playing';
-  mapData=generateMap();
+  // Rotate through maps each game
+  currentMapTheme = MAP_THEME_KEYS[mapThemeIndex % MAP_THEME_KEYS.length];
+  mapThemeIndex++;
+  mapData=generateMap(currentMapTheme);
   zone={x:MAP_W/2,y:MAP_H/2,radius:MAP_W*0.68};
   zonePhase=0;zoneTimer=0;zoneShrinking=false;zoneStartRadius=MAP_W*0.68;
   bullets=[];explosions=[];

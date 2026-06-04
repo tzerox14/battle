@@ -273,6 +273,12 @@ let particles=[],floatTexts=[];
 let prevHp=100,prevShield=0;
 let inZone=true;
 let scrollSlot=0;
+let currentTheme={groundColors:['#3a3a3a','#404040'],roadColor:'#2a2a2a',roadMarkColor:'rgba(255,255,200,0.12)',rockColor:'#555',rockHighlight:'#777',name:'Ville'};
+const MAP_THEMES_CLIENT={
+  city:{groundColors:['#3a3a3a','#404040'],roadColor:'#2a2a2a',roadMarkColor:'rgba(255,255,200,0.12)',rockColor:'#555',rockHighlight:'#777',name:'🏙️ Ville'},
+  jungle:{groundColors:['#1a4a0a','#1e5510'],roadColor:'#2d5016',roadMarkColor:'rgba(100,200,80,0.08)',rockColor:'#4a5e2a',rockHighlight:'#6a7e3a',name:'🌴 Jungle'},
+  desert:{groundColors:['#c9a96e','#d4b483'],roadColor:'#b8965a',roadMarkColor:'rgba(255,240,200,0.15)',rockColor:'#b8965a',rockHighlight:'#d4aa70',name:'🏜️ Désert'},
+};
 let audioStarted=false;
 
 function startAudio(){if(!audioStarted){AC.resume();audioStarted=true;}}
@@ -332,6 +338,13 @@ function handleMsg(msg){
   if(msg.type==='gameStart'){
     mapWalls=msg.map.walls;mapBuildings=msg.map.buildings||[];
     MAP_W=msg.map.w;MAP_H=msg.map.h;rLoots=msg.map.loots;
+    if(msg.map.theme&&MAP_THEMES_CLIENT[msg.map.theme])currentTheme=MAP_THEMES_CLIENT[msg.map.theme];
+    // Show map name briefly
+    const mapBanner=document.createElement('div');
+    mapBanner.style.cssText='position:absolute;top:40%;left:50%;transform:translate(-50%,-50%);font-family:Fredoka One,cursive;font-size:42px;color:#fff;text-shadow:0 4px 16px rgba(0,0,0,0.8);z-index:30;pointer-events:none;animation:kfout 2.5s forwards';
+    mapBanner.textContent=currentTheme.name;
+    document.body.appendChild(mapBanner);
+    setTimeout(()=>mapBanner.remove(),2500);
     startLocal();
   }
   if(msg.type==='gameState'){
@@ -393,7 +406,10 @@ function startLocal(){
 function sendInputs(){
   const me=rPlayers.find(p=>p.id===myId);
   if(!me||!me.alive)return;
-  inputs.angle=Math.atan2(mouseY-H/2,mouseX-W/2);
+  // Aim from player's actual screen position (not always center due to cam clamping)
+  const screenX = me.x - camX;
+  const screenY = me.y - camY;
+  inputs.angle=Math.atan2(mouseY-screenY,mouseX-screenX);
   inputs.shoot=mouseDown;
   const cur={...inputs};
   if(JSON.stringify(cur)!==JSON.stringify(lastSent)){
@@ -496,49 +512,52 @@ function renderFrame(){
 }
 
 function drawMap(){
-  ctx.fillStyle='#2d5016';ctx.fillRect(0,0,MAP_W,MAP_H);
+  const gc=currentTheme.groundColors;
+  ctx.fillStyle=gc[0];ctx.fillRect(0,0,MAP_W,MAP_H);
   for(let x=0;x<MAP_W;x+=80)for(let y=0;y<MAP_H;y+=80){
-    ctx.fillStyle=((x*7+y*13)%100)>50?'#2d5016':'#306118';
+    ctx.fillStyle=((x*7+y*13)%100)>50?gc[0]:gc[1];
     ctx.fillRect(x,y,80,80);
   }
-  // Roads
-  ctx.fillStyle='#7d6a4f';
+  // Roads / paths
+  ctx.fillStyle=currentTheme.roadColor;
   [[MAP_W/2-28,0,56,MAP_H],[0,MAP_H/2-28,MAP_W,56],[MAP_W/4-16,0,32,MAP_H],[MAP_W*3/4-16,0,32,MAP_H],[0,MAP_H/4-16,MAP_W,32],[0,MAP_H*3/4-16,MAP_W,32]].forEach(r=>ctx.fillRect(...r));
-  // Road lines
-  ctx.strokeStyle='rgba(255,255,200,0.15)';ctx.lineWidth=2;ctx.setLineDash([30,30]);
+  ctx.strokeStyle=currentTheme.roadMarkColor;ctx.lineWidth=2;ctx.setLineDash([30,30]);
   ctx.beginPath();ctx.moveTo(MAP_W/2,0);ctx.lineTo(MAP_W/2,MAP_H);ctx.stroke();
   ctx.beginPath();ctx.moveTo(0,MAP_H/2);ctx.lineTo(MAP_W,MAP_H/2);ctx.stroke();
   ctx.setLineDash([]);
 
-  // Buildings
+  // Buildings - use per-building theme stored in building meta
   mapBuildings.forEach((b,i)=>{
-    const t=BTHEMES[i%BTHEMES.length];
-    ctx.fillStyle='rgba(0,0,0,0.3)';
-    ctx.beginPath();ctx.roundRect(b.x+8,b.y+8,b.w,b.h,5);ctx.fill();
-    ctx.fillStyle=t.wall;
-    ctx.beginPath();ctx.roundRect(b.x,b.y,b.w,b.h,5);ctx.fill();
+    const t=b.theme||BTHEMES[i%BTHEMES.length];
+    const isThin=b.w<=55||b.h<=55;
+    if(isThin){
+      // Thin wall (desert ruin style)
+      ctx.fillStyle=t.wall;ctx.fillRect(b.x,b.y,b.w,b.h);
+      ctx.strokeStyle='rgba(0,0,0,0.35)';ctx.lineWidth=2;ctx.strokeRect(b.x,b.y,b.w,b.h);
+      // Crumble detail
+      ctx.fillStyle='rgba(0,0,0,0.15)';
+      for(let c=0;c<3;c++)ctx.fillRect(b.x+Math.random()*b.w*0.7,b.y+Math.random()*b.h*0.7,6,6);
+      return;
+    }
+    ctx.fillStyle='rgba(0,0,0,0.28)';ctx.beginPath();ctx.roundRect(b.x+7,b.y+7,b.w,b.h,5);ctx.fill();
+    ctx.fillStyle=t.wall;ctx.beginPath();ctx.roundRect(b.x,b.y,b.w,b.h,5);ctx.fill();
     ctx.fillStyle=t.roof;ctx.fillRect(b.x,b.y,b.w,22);
-    // Door
-    ctx.fillStyle=t.roof;
-    ctx.beginPath();ctx.roundRect(b.x+b.w/2-13,b.y+b.h-30,26,30,4);ctx.fill();
-    // Windows
+    ctx.fillStyle=t.roof;ctx.beginPath();ctx.roundRect(b.x+b.w/2-13,b.y+b.h-30,26,30,4);ctx.fill();
     [[0.25,0.45],[0.75,0.45]].forEach(([fx,fy])=>{
-      ctx.fillStyle=t.win||'#d4e6f1';
-      ctx.beginPath();ctx.roundRect(b.x+b.w*fx-11,b.y+b.h*fy-11,22,22,4);ctx.fill();
-      ctx.strokeStyle='rgba(0,0,0,0.25)';ctx.lineWidth=1;ctx.stroke();
-      ctx.strokeStyle='rgba(0,0,0,0.15)';ctx.lineWidth=1;
+      ctx.fillStyle=t.win||'#d4e6f1';ctx.beginPath();ctx.roundRect(b.x+b.w*fx-11,b.y+b.h*fy-11,22,22,4);ctx.fill();
+      ctx.strokeStyle='rgba(0,0,0,0.2)';ctx.lineWidth=1;ctx.stroke();
+      ctx.strokeStyle='rgba(0,0,0,0.12)';
       ctx.beginPath();ctx.moveTo(b.x+b.w*fx,b.y+b.h*fy-11);ctx.lineTo(b.x+b.w*fx,b.y+b.h*fy+11);ctx.stroke();
       ctx.beginPath();ctx.moveTo(b.x+b.w*fx-11,b.y+b.h*fy);ctx.lineTo(b.x+b.w*fx+11,b.y+b.h*fy);ctx.stroke();
     });
-    ctx.strokeStyle='rgba(0,0,0,0.45)';ctx.lineWidth=2;
-    ctx.beginPath();ctx.roundRect(b.x,b.y,b.w,b.h,5);ctx.stroke();
+    ctx.strokeStyle='rgba(0,0,0,0.4)';ctx.lineWidth=2;ctx.beginPath();ctx.roundRect(b.x,b.y,b.w,b.h,5);ctx.stroke();
   });
 
   // Rocks
   mapWalls.filter(w=>w.type==='rock').forEach(r=>{
     ctx.fillStyle='rgba(0,0,0,0.2)';ctx.beginPath();ctx.ellipse(r.x+r.w/2+4,r.y+r.h/2+5,r.w/2,r.h/2*.6,0,0,Math.PI*2);ctx.fill();
-    ctx.fillStyle='#6d7a8a';ctx.beginPath();ctx.ellipse(r.x+r.w/2,r.y+r.h/2,r.w/2,r.h/2,0,0,Math.PI*2);ctx.fill();
-    ctx.fillStyle='#8795a8';ctx.beginPath();ctx.ellipse(r.x+r.w/2-3,r.y+r.h/2-3,r.w*.28,r.h*.25,0,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle=currentTheme.rockColor||'#6d7a8a';ctx.beginPath();ctx.ellipse(r.x+r.w/2,r.y+r.h/2,r.w/2,r.h/2,0,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle=currentTheme.rockHighlight||'#8795a8';ctx.beginPath();ctx.ellipse(r.x+r.w/2-3,r.y+r.h/2-3,r.w*.28,r.h*.25,0,0,Math.PI*2);ctx.fill();
     ctx.strokeStyle='rgba(0,0,0,0.3)';ctx.lineWidth=1.5;ctx.beginPath();ctx.ellipse(r.x+r.w/2,r.y+r.h/2,r.w/2,r.h/2,0,0,Math.PI*2);ctx.stroke();
   });
 }
