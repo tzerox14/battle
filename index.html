@@ -270,9 +270,32 @@ canvas{display:block;position:absolute;top:0;left:0}
 
 <script>
 // ── Audio ─────────────────────────────────────────────────────
-// Sons désactivés
-const SFX={};
-function startAudio(){}
+const AC = new (window.AudioContext||window.webkitAudioContext)();
+function playTone(f,t,tp,v=0.3,sf=null){try{const o=AC.createOscillator(),g=AC.createGain();o.connect(g);g.connect(AC.destination);o.type=tp;sf?(o.frequency.setValueAtTime(sf,AC.currentTime),o.frequency.exponentialRampToValueAtTime(f,AC.currentTime+t)):o.frequency.setValueAtTime(f,AC.currentTime);g.gain.setValueAtTime(v,AC.currentTime);g.gain.exponentialRampToValueAtTime(0.001,AC.currentTime+t);o.start();o.stop(AC.currentTime+t);}catch(e){}}
+function playNoise(d,v=0.2,ff=2000){try{const b=AC.createBuffer(1,AC.sampleRate*d,AC.sampleRate),dt=b.getChannelData(0);for(let i=0;i<dt.length;i++)dt[i]=Math.random()*2-1;const s=AC.createBufferSource();s.buffer=b;const f=AC.createBiquadFilter();f.type='lowpass';f.frequency.value=ff;const g=AC.createGain();g.gain.setValueAtTime(v,AC.currentTime);g.gain.exponentialRampToValueAtTime(0.001,AC.currentTime+d);s.connect(f);f.connect(g);g.connect(AC.destination);s.start();s.stop(AC.currentTime+d);}catch(e){}}
+const SFX={
+  shoot_pistol:()=>{playNoise(0.08,0.35,3000);playTone(180,'square',0.06,0.15);},
+  shoot_smg:()=>{playNoise(0.06,0.28,4000);playTone(220,'sawtooth',0.05,0.1);},
+  shoot_shotgun:()=>{playNoise(0.18,0.55,1200);playTone(90,'square',0.15,0.25);},
+  shoot_rifle:()=>{playNoise(0.22,0.6,5000);playTone(120,'sawtooth',0.2,0.3);},
+  shoot_burst:()=>{playNoise(0.07,0.32,3500);},
+  shoot_rocket:()=>{playNoise(0.35,0.7,800);playTone(60,'sawtooth',0.3,0.4);},
+  shoot_minigun:()=>{playNoise(0.05,0.22,3800);},
+  empty:()=>{playTone(200,'square',0.05,0.08);},
+  fist:()=>{playNoise(0.08,0.3,800);playTone(150,'square',0.06,0.1);},
+  heal:()=>{playTone(440,'sine',0.1,0.2);playTone(660,'sine',0.1,0.15);},
+  shield:()=>{playTone(500,'sine',0.1,0.2);playTone(700,'sine',0.12,0.2);},
+  ammo:()=>{playTone(330,'triangle',0.08,0.15);},
+  pickup_weapon:()=>{playTone(300,'triangle',0.06,0.12);playTone(450,'triangle',0.08,0.15);},
+  explosion:()=>{playNoise(0.5,0.8,600);playTone(50,'sawtooth',0.4,0.5);},
+  hit_taken:()=>{playNoise(0.1,0.4,1500);},
+  death:()=>{playNoise(0.6,0.5,800);playTone(100,'sawtooth',0.5,0.3,200);},
+  jump_bus:()=>{playTone(300,'sine',0.2,0.3,200);},
+  victory:()=>{[523,659,784,1047].forEach((f,i)=>setTimeout(()=>playTone(f,'sine',0.3,0.3),i*120));},
+  footstep:()=>{playNoise(0.04,0.06,500);},
+};
+let audioStarted=false;
+function startAudio(){if(!audioStarted){AC.resume();audioStarted=true;}}
 function stopAmbience(){}
 function startAmbience(){}
 
