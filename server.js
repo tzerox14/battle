@@ -13,6 +13,15 @@ const server = http.createServer((req, res) => {
 
 const wss = new WebSocket.Server({ server, maxPayload: 50 * 1024 * 1024 });
 
+// Keepalive ping every 25s to prevent Railway proxy from dropping connections
+setInterval(() => {
+  wss.clients.forEach(ws => {
+    if (ws.isAlive === false) { ws.terminate(); return; }
+    ws.isAlive = false;
+    ws.ping();
+  });
+}, 25000);
+
 const TICK = 60;
 const MAP_SIZE = 4800;
 const MAX_PLAYERS = 10;
@@ -626,10 +635,13 @@ function broadcast(msg){
 
 let colorIdx=0;
 wss.on('connection',ws=>{
+  ws.isAlive = true;
+  ws.on('pong', () => { ws.isAlive = true; });
   let playerId=null;
   ws.send(JSON.stringify({type:'init',gameState,playerCount:Object.keys(players).length}));
   ws.on('message',raw=>{
     let msg;try{msg=JSON.parse(raw);}catch{return;}
+    if(msg.type==='ping'){ws.isAlive=true;return;}
     if(msg.type==='join'){
       if(Object.keys(players).length>=MAX_PLAYERS){ws.send(JSON.stringify({type:'error',msg:'Plein !'}));return;}
       const name=filterName((msg.name||'Joueur').slice(0,16));
