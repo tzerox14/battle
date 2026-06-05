@@ -466,10 +466,9 @@ function updateLobby(players){
 
 let myVote=null;
 function voteMap(theme){
-  if(!ws||!myId)return;
+  if(!ws||ws.readyState!==1)return;
   myVote=theme;
   ws.send(JSON.stringify({type:'voteMap',theme}));
-  // Immediate local feedback
   ['city','desert','tokyo'].forEach(k=>{
     const btn=document.getElementById('vote-'+k);
     if(btn)btn.classList.toggle('my-vote',k===theme);
@@ -479,8 +478,8 @@ function voteMap(theme){
 function updateVoteUI(votes,playerVotes){
   const themes=['city','desert','tokyo'];
   const total=Math.max(1,Object.values(votes).reduce((a,b)=>a+b,0));
-  let maxVotes=-1,winner=null;
-  themes.forEach(k=>{if(votes[k]>maxVotes){maxVotes=votes[k];winner=k;}});
+  let maxVotes=0,winner=null;
+  themes.forEach(k=>{if((votes[k]||0)>maxVotes){maxVotes=votes[k]||0;winner=k;}});
 
   themes.forEach(k=>{
     const bar=document.getElementById('vbar-'+k);
@@ -488,11 +487,10 @@ function updateVoteUI(votes,playerVotes){
     const btn=document.getElementById('vote-'+k);
     if(!bar||!cnt||!btn)return;
     const v=votes[k]||0;
-    bar.style.width=(v/total*100)+'%';
+    bar.style.width=(total>0?v/total*100:0)+'%';
     cnt.textContent=v===0?'0 vote':`${v} vote${v>1?'s':''}`;
-    btn.classList.toggle('my-vote',playerVotes&&playerVotes[myId]===k);
+    btn.classList.toggle('my-vote',!!(playerVotes&&playerVotes[myId]===k));
     btn.classList.toggle('leading',k===winner&&maxVotes>0);
-    // Winner badge
     let badge=btn.querySelector('.vote-winner-badge');
     if(k===winner&&maxVotes>0){
       if(!badge){badge=document.createElement('div');badge.className='vote-winner-badge';badge.textContent='EN TÊTE';btn.appendChild(badge);}
@@ -502,7 +500,10 @@ function updateVoteUI(votes,playerVotes){
   });
 }
 
-function startGame(){ws.send(JSON.stringify({type:'startGame'}));}
+function startGame(){
+  if(!ws||ws.readyState!==1)return;
+  ws.send(JSON.stringify({type:'startGame'}));
+}
 function restartGame(){ws.send(JSON.stringify({type:'restart'}));location.reload();}
 
 function showBusScreen(){

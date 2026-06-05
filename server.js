@@ -11,7 +11,7 @@ const server = http.createServer((req, res) => {
   });
 });
 
-const wss = new WebSocket.Server({ server });
+const wss = new WebSocket.Server({ server, maxPayload: 50 * 1024 * 1024 });
 
 const TICK = 60;
 const MAP_SIZE = 4800;
@@ -601,9 +601,11 @@ function serializePlayers(){
 }
 
 function startGame(){
+  if(Object.keys(players).length===0)return;
+  try{
   gameState='playing';
   const themeKey = getWinningMap();
-  mapVotes = {}; // reset votes
+  mapVotes = {};
   mapData=generateMap(themeKey);
   zone={x:MAP_SIZE/2,y:MAP_SIZE/2,radius:MAP_SIZE*0.68};
   zonePhase=0;zoneTimer=0;zoneShrinking=false;zoneStartRadius=MAP_SIZE*0.68;
@@ -611,8 +613,10 @@ function startGame(){
   bus=makeBus(MAP_SIZE,MAP_SIZE);
   let idx=0;
   for(const id of Object.keys(players)){const name=players[id].name;players[id]=makePlayer(id,name,idx++);}
+  if(gameLoop){clearInterval(gameLoop);gameLoop=null;}
   gameLoop=setInterval(tickGame,1000/TICK);
   broadcast({type:'gameStart',map:{walls:mapData.walls,buildings:mapData.buildings,loots:mapData.loots,bushes:mapData.bushes,w:MAP_SIZE,h:MAP_SIZE,theme:themeKey,themeName:mapData.themeName}});
+  }catch(e){console.error('startGame error:',e);gameState='lobby';}
 }
 
 function broadcast(msg){
