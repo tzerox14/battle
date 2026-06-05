@@ -241,22 +241,6 @@ function generateMap(themeKey) {
   return { walls, loots, buildings:buildingMeta, bushes, theme:themeKey, themeName:theme.name, w:MAP_W, h:MAP_H };
 }
 
-// ── BUS ────────────────────────────────────────────────────────
-function makeBus(MAP_W, MAP_H) {
-  // Bus flies horizontally across top of map (random Y), then diagonal
-  const angle = (Math.random() * 0.4 + 0.1) * Math.PI; // roughly diagonal
-  const startX = -100;
-  const startY = 400 + Math.random() * (MAP_H - 800);
-  const endX = MAP_W + 100;
-  const endY = startY + (Math.random() - 0.5) * MAP_H * 0.5;
-  return {
-    x: startX, y: startY,
-    startX, startY, endX, endY,
-    progress: 0,
-    speed: 0.00045, // slower = more time to choose where to drop
-    phase: 'flying',
-  };
-}
 
 // ── GAME STATE ─────────────────────────────────────────────────
 let mapData = generateMap('city');
@@ -266,7 +250,7 @@ let explosions = [];
 let bulletId = 0;
 let gameState = 'lobby';
 let gameLoop = null;
-let bus = null;
+
 let zone = { x:MAP_SIZE/2, y:MAP_SIZE/2, radius:MAP_SIZE*0.68 };
 let zonePhase=0, zoneTimer=0, zoneShrinking=false, zoneStartRadius=MAP_SIZE*0.68;
 
@@ -312,8 +296,8 @@ function makePlayer(id, name, colorIdx) {
     hp: 100, maxHp: 100,
     shield: 0, maxShield: 75,
     alive: true,
-    inBus: true,       // starts in bus
-    dropped: false,    // has jumped from bus
+    inBus: false,      // no bus spawn
+    dropped: true,     // already on ground
     inventory: [null, null, null, null],
     activeSlot: 0,
     ammo: Object.fromEntries(Object.keys(WEAPONS).map(k=>[k,0])),
@@ -322,7 +306,7 @@ function makePlayer(id, name, colorIdx) {
     fistAnim: 0,       // frames of fist animation
     burstLeft: 0, burstTimer: 0,
     kills: 0,
-    inputs: { up:false, down:false, left:false, right:false, shoot:false, angle:0, slot:-1, interact:false, drop:false, fist:false, jumpFromBus:false },
+    inputs: { up:false, down:false, left:false, right:false, shoot:false, angle:0, slot:-1, interact:false, drop:false, fist:false },
     interactCooldown: 0,
     isMoving: false,
     inBush: false,
@@ -353,20 +337,9 @@ function checkBushes(p) {
   p.inBush = mapData.bushes.some(b => Math.sqrt((p.x-b.x)**2+(p.y-b.y)**2) < b.r * 0.8);
 }
 
+
 function tickGame() {
-  // Bus
-  if (bus && bus.phase === 'flying') {
-    bus.progress = Math.min(1, bus.progress + bus.speed);
-    bus.x = bus.startX + (bus.endX - bus.startX) * bus.progress;
-    bus.y = bus.startY + (bus.endY - bus.startY) * bus.progress;
-    if (bus.progress >= 1) {
-      bus.phase = 'done';
-      // Force drop anyone still in bus
-      Object.values(players).forEach(p => {
-        if (p.inBus) { p.inBus = false; p.dropped = true; p.x = bus.x; p.y = bus.y; }
-      });
-    }
-  }
+  try {
 
   // Zone
   zoneTimer++;
@@ -386,19 +359,6 @@ function tickGame() {
   for (const p of pList) {
     p.sounds = [];
 
-    // Bus logic
-    if (p.inBus) {
-      p.x = bus.x + (Math.random()-0.5)*10;
-      p.y = bus.y + (Math.random()-0.5)*10;
-      if (p.inputs.jumpFromBus) {
-        p.inBus = false;
-        p.dropped = true;
-        p.x = bus.x;
-        p.y = bus.y;
-        p.sounds.push('jump_bus');
-      }
-      continue;
-    }
 
     if (!p.alive) continue;
     if (p.interactCooldown>0) p.interactCooldown--;
@@ -534,7 +494,7 @@ function tickGame() {
     if(b.life<=0||b.dist>b.range){if(b.explosive)doExplosion(b.x,b.y,b.explosionRadius,b.damage,b.owner);return false;}
     if(bulletHitsWall(b)){if(b.explosive)doExplosion(b.x,b.y,b.explosionRadius,b.damage,b.owner);return false;}
     if(b.x<0||b.x>MAP_SIZE||b.y<0||b.y>MAP_SIZE)return false;
-    for(const p of pList.filter(p=>p.alive&&!p.inBus)){
+    for(const p of pList.filter(p=>p.alive)){
       if(p.id===b.owner)continue;
       if((p.x-b.x)**2+(p.y-b.y)**2<(PLAYER_RADIUS+BULLET_RADIUS)**2){
         if(b.explosive){doExplosion(b.x,b.y,b.explosionRadius,b.damage,b.owner);return false;}
@@ -557,9 +517,9 @@ function tickGame() {
     explosions:explosions.map(e=>({x:Math.round(e.x),y:Math.round(e.y),r:e.radius,life:e.life,maxLife:e.maxLife})),
     zone:{x:Math.round(zone.x),y:Math.round(zone.y),radius:Math.round(zone.radius)},
     loots:mapData.loots.filter(l=>!l.picked),
-    bus:bus?{x:Math.round(bus.x),y:Math.round(bus.y),progress:+bus.progress.toFixed(3),phase:bus.phase}:null,
     sounds:allSounds,
   });
+  }catch(e){console.error('tickGame error:',e.message);}
 }
 
 function fireBullet(p,weaponId,w){
@@ -569,7 +529,7 @@ function fireBullet(p,weaponId,w){
 }
 function doExplosion(x,y,radius,damage,ownerId){
   explosions.push({x,y,radius,life:25,maxLife:25});
-  for(const p of Object.values(players).filter(p=>p.alive&&!p.inBus)){
+  for(const p of Object.values(players).filter(p=>p.alive)){
     if(p.id===ownerId)continue;
     const d=Math.sqrt((p.x-x)**2+(p.y-y)**2);
     if(d<radius)applyDamage(p,damage*(1-d/radius),ownerId);
@@ -583,7 +543,7 @@ function applyDamage(p,dmg,killerId){
 function killPlayer(p,killerId){
   if(!p.alive)return;
   p.alive=false;p.hp=0;
-  const ac=Object.values(players).filter(q=>q.alive&&!q.inBus).length;
+  const ac=Object.values(players).filter(q=>q.alive).length;
   p.rank=ac+1;
   p.inventory.filter(Boolean).forEach(item=>{
     mapData.loots.push({id:'drop_'+Date.now()+'_'+Math.random(),x:p.x+(Math.random()-0.5)*80,y:p.y+(Math.random()-0.5)*80,type:item.type,picked:false});
@@ -591,8 +551,8 @@ function killPlayer(p,killerId){
   broadcast({type:'playerDied',id:p.id,name:p.name,killerId,killerName:killerId?players[killerId]?.name:null,rank:p.rank});
 }
 function checkWin(){
-  const alive=Object.values(players).filter(p=>p.alive&&!p.inBus);
-  const total=Object.values(players).filter(p=>!p.inBus);
+  const alive=Object.values(players).filter(p=>p.alive);
+  const total=Object.values(players);
   if(alive.length<=1&&total.length>1){
     if(alive.length===1)alive[0].rank=1;
     clearInterval(gameLoop);gameLoop=null;gameState='ended';
@@ -604,7 +564,7 @@ function serializePlayers(){
     id:p.id,name:p.name,color:p.color,
     x:Math.round(p.x),y:Math.round(p.y),angle:p.angle,
     hp:Math.max(0,Math.round(p.hp)),shield:Math.round(p.shield),
-    alive:p.alive,inBus:p.inBus,inventory:p.inventory,activeSlot:p.activeSlot,
+    alive:p.alive,inventory:p.inventory,activeSlot:p.activeSlot,
     ammo:p.ammo,kills:p.kills,isMoving:p.isMoving,inBush:p.inBush,fistAnim:p.fistAnim,
   }));
 }
@@ -619,9 +579,15 @@ function startGame(){
   zone={x:MAP_SIZE/2,y:MAP_SIZE/2,radius:MAP_SIZE*0.68};
   zonePhase=0;zoneTimer=0;zoneShrinking=false;zoneStartRadius=MAP_SIZE*0.68;
   bullets=[];explosions=[];
-  bus=makeBus(MAP_SIZE,MAP_SIZE);
   let idx=0;
-  for(const id of Object.keys(players)){const name=players[id].name;players[id]=makePlayer(id,name,idx++);}
+  for(const id of Object.keys(players)){
+    const name=players[id].name;
+    players[id]=makePlayer(id,name,idx++);
+    // Spawn at random position within playable area
+    const margin = 300;
+    players[id].x = margin + Math.random() * (MAP_SIZE - margin*2);
+    players[id].y = margin + Math.random() * (MAP_SIZE - margin*2);
+  }
   if(gameLoop){clearInterval(gameLoop);gameLoop=null;}
   gameLoop=setInterval(tickGame,1000/TICK);
   broadcast({type:'gameStart',map:{walls:mapData.walls,buildings:mapData.buildings,loots:mapData.loots,bushes:mapData.bushes,w:MAP_SIZE,h:MAP_SIZE,theme:themeKey,themeName:mapData.themeName}});
@@ -630,7 +596,17 @@ function startGame(){
 
 function broadcast(msg){
   const data=JSON.stringify(msg);
-  wss.clients.forEach(ws=>{if(ws.readyState===WebSocket.OPEN)ws.send(data);});
+  wss.clients.forEach(ws=>{
+    try{
+      if(ws.readyState===WebSocket.OPEN)ws.send(data);
+    }catch(e){console.error('broadcast error:',e.message);}
+  });
+}
+
+function safeSend(ws, msg){
+  try{
+    if(ws.readyState===WebSocket.OPEN)ws.send(JSON.stringify(msg));
+  }catch(e){console.error('safeSend error:',e.message);}
 }
 
 let colorIdx=0;
@@ -638,34 +614,41 @@ wss.on('connection',ws=>{
   ws.isAlive = true;
   ws.on('pong', () => { ws.isAlive = true; });
   let playerId=null;
-  ws.send(JSON.stringify({type:'init',gameState,playerCount:Object.keys(players).length}));
+  safeSend(ws,{type:'init',gameState,playerCount:Object.keys(players).length});
+
   ws.on('message',raw=>{
-    let msg;try{msg=JSON.parse(raw);}catch{return;}
-    if(msg.type==='ping'){ws.isAlive=true;return;}
-    if(msg.type==='join'){
-      if(Object.keys(players).length>=MAX_PLAYERS){ws.send(JSON.stringify({type:'error',msg:'Plein !'}));return;}
-      const name=filterName((msg.name||'Joueur').slice(0,16));
-      playerId='p_'+Date.now()+'_'+Math.random().toString(36).slice(2,6);
-      players[playerId]=makePlayer(playerId,name,colorIdx++%MAX_PLAYERS);
-      ws.playerId=playerId;
-      ws.send(JSON.stringify({type:'joined',id:playerId,color:players[playerId].color}));
-      broadcast({type:'lobby',players:Object.values(players).map(p=>({id:p.id,name:p.name,color:p.color})),gameState});
-      broadcastVotes();
-    }
-    if(msg.type==='voteMap'&&playerId&&gameState==='lobby'){
-      if(THEME_KEYS.includes(msg.theme)){
-        mapVotes[playerId]=msg.theme;
+    let msg;
+    try{msg=JSON.parse(raw);}catch{return;}
+    try{
+      if(msg.type==='ping'){ws.isAlive=true;return;}
+      if(msg.type==='join'){
+        if(Object.keys(players).length>=MAX_PLAYERS){safeSend(ws,{type:'error',msg:'Plein !'});return;}
+        const name=filterName((msg.name||'Joueur').slice(0,16));
+        playerId='p_'+Date.now()+'_'+Math.random().toString(36).slice(2,6);
+        players[playerId]=makePlayer(playerId,name,colorIdx++%MAX_PLAYERS);
+        ws.playerId=playerId;
+        safeSend(ws,{type:'joined',id:playerId,color:players[playerId].color});
+        broadcast({type:'lobby',players:Object.values(players).map(p=>({id:p.id,name:p.name,color:p.color})),gameState});
         broadcastVotes();
       }
-    }
-    if(msg.type==='startGame'&&gameState==='lobby')startGame();
-    if(msg.type==='restart'&&gameState==='ended'){
-      gameState='lobby';colorIdx=0;players={};bullets=[];explosions=[];bus=null;mapVotes={};
-      broadcast({type:'lobby',players:[],gameState:'lobby'});
-      broadcastVotes();
-    }
-    if(msg.type==='inputs'&&playerId&&players[playerId])Object.assign(players[playerId].inputs,msg.inputs);
+      if(msg.type==='voteMap'&&playerId&&gameState==='lobby'){
+        if(THEME_KEYS.includes(msg.theme)){
+          mapVotes[playerId]=msg.theme;
+          broadcastVotes();
+        }
+      }
+      if(msg.type==='startGame'&&gameState==='lobby')startGame();
+      if(msg.type==='restart'&&gameState==='ended'){
+        gameState='lobby';colorIdx=0;players={};bullets=[];explosions=[];mapVotes={};
+        broadcast({type:'lobby',players:[],gameState:'lobby'});
+        broadcastVotes();
+      }
+      if(msg.type==='inputs'&&playerId&&players[playerId])Object.assign(players[playerId].inputs,msg.inputs);
+    }catch(e){console.error('message handler error:',e.message);}
   });
+
+  ws.on('error',(e)=>console.error('ws error:',e.message));
+
   ws.on('close',()=>{
     if(playerId&&players[playerId]){
       delete players[playerId];

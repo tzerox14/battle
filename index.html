@@ -64,12 +64,7 @@ canvas{display:block;position:absolute;top:0;left:0}
 #nameBox input{width:100%;background:rgba(0,0,0,0.4);border:2px solid rgba(255,150,0,0.4);border-radius:10px;padding:12px;font-size:16px;color:#fff;font-family:'Inter',sans-serif;outline:none;text-align:center}
 #nameBox input:focus{border-color:rgba(255,150,0,0.8)}
 
-/* ── BUS SCREEN ── */
-#busScreen{position:absolute;top:0;left:0;width:100%;height:100%;display:none;align-items:center;justify-content:center;flex-direction:column;z-index:15;pointer-events:none}
-#busMsg{font-family:'Fredoka One',cursive;font-size:36px;color:#fff;text-shadow:0 2px 12px rgba(0,0,0,.8);letter-spacing:2px;margin-bottom:12px}
-#busSub{font-size:14px;color:rgba(255,255,255,0.7);text-align:center;letter-spacing:1px}
-#busJumpBtn{background:linear-gradient(135deg,#ff6600,#ff9900);color:#fff;border:none;border-radius:12px;padding:14px 36px;font-family:'Fredoka One',cursive;font-size:20px;letter-spacing:2px;cursor:pointer;margin-top:20px;pointer-events:all;transition:transform .1s}
-#busJumpBtn:active{transform:scale(0.96)}
+
 
 /* ── INVENTORY ── */
 #inventory{position:absolute;bottom:16px;left:50%;transform:translateX(-50%);display:flex;gap:7px}
@@ -208,19 +203,14 @@ canvas{display:block;position:absolute;top:0;left:0}
       <div><span class="ky">G</span> Drop arme</div>
       <div><span class="ky">1-4</span> Changer arme</div>
       <div><span class="ky">Molette</span> Arme suiv.</div>
-      <div><span class="ky">Espace</span> Sauter du bus</div>
+
     </div>
     <button class="menu-btn menu-btn-play" style="margin-top:12px" onclick="startGame()">Lancer !</button>
     <div class="status-line" id="lobbyStatus">En attente...</div>
   </div>
 </div>
 
-<!-- ── BUS ── -->
-<div id="busScreen">
-  <div id="busMsg">✈️ Dans le bus de combat</div>
-  <div id="busSub">Survole la map et saute quand tu veux !</div>
-  <button id="busJumpBtn" onclick="jumpFromBus()">SAUTER !</button>
-</div>
+
 
 <!-- ── GAME OVER ── -->
 <div id="gameover">
@@ -342,7 +332,7 @@ let rBus=null;
 let mapWalls=[],mapBuildings=[],MAP_W=4800,MAP_H=4800;
 let camX=0,camY=0,targetCamX=0,targetCamY=0;
 let mouseX=W/2,mouseY=H/2,mouseDown=false;
-let inputs={up:false,down:false,left:false,right:false,shoot:false,angle:0,slot:-1,interact:false,drop:false,fist:false,jumpFromBus:false};
+let inputs={up:false,down:false,left:false,right:false,shoot:false,angle:0,slot:-1,interact:false,drop:false,fist:false};
 let lastSent={},inputInterval;
 let particles=[],neonLines=[];
 let prevHp=100,prevShield=0;
@@ -351,7 +341,8 @@ let currentTheme=MAP_THEMES_C.city,currentThemeName='🏙️ Ville';
 // Interpolated player positions for smooth rendering
 let interpPlayers={};
 let lastRenderTime=0;
-let myInBus=true;
+
+
 let neonFlicker=0;
 
 document.addEventListener('mousemove',e=>{mouseX=e.clientX;mouseY=e.clientY;});
@@ -369,7 +360,7 @@ document.addEventListener('wheel',e=>{
 
 document.addEventListener('keydown',e=>{
   startAudio();
-  if(gameState==='bus'){if(e.code==='Space'||e.key===' ')jumpFromBus();e.preventDefault();return;}
+
   if(gameState!=='playing')return;
   // e.key reflects the actual character on the key (works on AZERTY)
   const k=e.key.toLowerCase();
@@ -432,17 +423,15 @@ function handleMsg(msg){
     MAP_W=msg.map.w;MAP_H=msg.map.h;rLoots=msg.map.loots;rBushes=msg.map.bushes||[];
     currentTheme=MAP_THEMES_C[msg.map.theme]||MAP_THEMES_C.city;
     currentThemeName=msg.map.themeName||'Map';
-    gameState='bus';myInBus=true;
-    showBusScreen();
+    gameState='playing';
     setTimeout(()=>{startPlayingHUD();startAmbience();},500);
   }
   if(msg.type==='gameState'){
     rPlayers=msg.players;rBullets=msg.bullets;
     rZone=msg.zone;rExplosions=msg.explosions||[];
-    rBus=msg.bus;
     if(msg.loots)rLoots=msg.loots;
     const me=rPlayers.find(p=>p.id===myId);
-    if(me&&me.inBus===false&&myInBus){myInBus=false;hideBusScreen();}    if(msg.sounds){
+    if(msg.sounds){
       msg.sounds.forEach(s=>{
         const dist=me?Math.sqrt((s.x-me.x)**2+(s.y-me.y)**2):0;
         if(s.pid===myId){if(SFX[s.sound])SFX[s.sound]();}
@@ -457,7 +446,7 @@ function handleMsg(msg){
 
 // ── UI Functions ──────────────────────────────────────────────
 function showNameOverlay(){document.getElementById('nameOverlay').style.display='flex';document.getElementById('nameInput').focus();connect();}
-function showControls(){alert('ZQSD/Flèches: Déplacer\nClic G: Tirer/Frapper (poings si pas d\'arme)\nE: Ramasser\nG: Drop arme\n1-4 ou Molette: Changer arme\nEspace dans le bus: Sauter');}
+function showControls(){alert('ZQSD/Flèches: Déplacer\nClic G: Tirer/Frapper (poings si pas d\'arme)\nE: Ramasser\nG: Drop arme\n1-4 ou Molette: Changer arme');}
 function joinGame(){
   const name=document.getElementById('nameInput').value.trim()||'Joueur';
   ws.send(JSON.stringify({type:'join',name}));
@@ -519,9 +508,9 @@ function restartGame(){ws.send(JSON.stringify({type:'restart'}));location.reload
 
 function showBusScreen(){
   document.getElementById('screenLobby').style.display='none';
-  document.getElementById('busScreen').style.display='flex';
-  document.getElementById('map-pill').textContent=currentThemeName;
 }
+function hideBusScreen(){}
+function jumpFromBus(){}
 function startPlayingHUD(){
   gameState='playing';
   ['hud-top','hud-health','inventory','minimap-wrap'].forEach(id=>document.getElementById(id).style.display=id==='inventory'?'flex':'block');
@@ -530,22 +519,10 @@ function startPlayingHUD(){
   clearInterval(inputInterval);
   inputInterval=setInterval(sendInputs,1000/60);
 }
-function hideBusScreen(){
-  document.getElementById('busScreen').style.display='none';
-}
-function jumpFromBus(){
-  inputs.jumpFromBus=true;
-  SFX.jump_bus();
-  setTimeout(()=>{inputs.jumpFromBus=false;},200);
-}
 
 function sendInputs(){
   const me=rPlayers.find(p=>p.id===myId);
   if(!me)return;
-  if(me.inBus){
-    if(inputs.jumpFromBus){ws.send(JSON.stringify({type:'inputs',inputs:{jumpFromBus:true}}));inputs.jumpFromBus=false;}
-    return;
-  }
   const screenX=me.x-camX, screenY=me.y-camY;
   inputs.angle=Math.atan2(mouseY-screenY,mouseX-screenX);
   // Fist when no weapon and clicking
@@ -573,7 +550,6 @@ function showGameOver(msg){
   ['hud-top','hud-health','inventory','minimap-wrap'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display='none';});
   document.getElementById('crosshair').style.display='none';
   document.getElementById('fist-indicator').style.display='none';
-  document.getElementById('busScreen').style.display='none';
   const go=document.getElementById('gameover');go.style.display='flex';
   if(msg.winner){
     const isMe=msg.winner.id===myId;
@@ -630,20 +606,14 @@ function renderFrame(){
   });
 
   if(me){
-    if(me.inBus&&rBus&&rBus.phase!=='done'){
-      // Camera follows bus smoothly
-      targetCamX=Math.max(0,Math.min(MAP_W-W,rBus.x-W/2));
-      targetCamY=Math.max(0,Math.min(MAP_H-H,rBus.y-H/2));
-    } else if(!me.inBus){
-      const ip=interpPlayers[myId]||me;
-      targetCamX=Math.max(0,Math.min(MAP_W-W,ip.x-W/2));
-      targetCamY=Math.max(0,Math.min(MAP_H-H,ip.y-H/2));
-    }
+    const ip=interpPlayers[myId]||me;
+    targetCamX=Math.max(0,Math.min(MAP_W-W,ip.x-W/2));
+    targetCamY=Math.max(0,Math.min(MAP_H-H,ip.y-H/2));
     // Smooth camera
     camX+=(targetCamX-camX)*Math.min(0.18*dt,1);
     camY+=(targetCamY-camY)*Math.min(0.18*dt,1);
 
-    if(!me.inBus){
+    {
       updateHUD(me);
       if(me.isMoving&&me.alive){footstepTimer++;if(footstepTimer%24===0)SFX.footstep();}
       const dz=Math.sqrt((me.x-rZone.x)**2+(me.y-rZone.y)**2);
@@ -662,7 +632,6 @@ function renderFrame(){
   drawBullets();
   drawPlayers(me);
   drawBushes(true);
-  drawBus();
   drawParticles();
   ctx.restore();
   drawMinimap();
@@ -672,7 +641,7 @@ function renderFrame(){
   neonFlicker=(neonFlicker+1)%60;
 
   // Loot popup
-  if(me&&me.alive&&!me.inBus){
+  if(me&&me.alive){
     const near=rLoots.filter(l=>Math.sqrt((me.x-l.x)**2+(me.y-l.y)**2)<60);
     const popup=document.getElementById('popup');
     if(near.length>0){const info=LINFO[near[0].type];popup.style.opacity='1';popup.innerHTML=`${info?.icon||'?'} <b style="color:${RCOL[info?.rarity||'common']}">${info?.name}</b> — <b>E</b> pour ramasser`;}
@@ -833,7 +802,7 @@ function drawBullets(){
 
 function drawPlayers(me){
   rPlayers.forEach(p=>{
-    if(!p.alive||p.inBus)return;
+    if(!p.alive)return;
     // Hide in bush (other players)
     if(p.id!==myId&&p.inBush){
       const meDist=me?Math.sqrt((me.x-p.x)**2+(me.y-p.y)**2):999;
@@ -912,130 +881,6 @@ function drawPlayers(me){
   });
 }
 
-function drawBus(){
-  if(!rBus||rBus.phase==='done')return;
-  const bx=rBus.x, by=rBus.y;
-  // Compute flight angle
-  const dx=rBus.endX-rBus.startX, dy=rBus.endY-rBus.startY;
-  const angle=Math.atan2(dy,dx);
-  const now=Date.now();
-
-  ctx.save();
-
-  // ── Contrail (long dotted path behind) ──
-  ctx.save();
-  ctx.setLineDash([12,14]);
-  ctx.strokeStyle='rgba(255,255,255,0.18)';
-  ctx.lineWidth=3;
-  ctx.beginPath();
-  ctx.moveTo(rBus.startX,rBus.startY);
-  ctx.lineTo(bx,by);
-  ctx.stroke();
-  ctx.setLineDash([]);
-  // Future path (dashed lighter)
-  ctx.strokeStyle='rgba(255,255,255,0.07)';
-  ctx.setLineDash([8,18]);
-  ctx.beginPath();
-  ctx.moveTo(bx,by);
-  ctx.lineTo(rBus.endX,rBus.endY);
-  ctx.stroke();
-  ctx.setLineDash([]);
-  ctx.restore();
-
-  // ── Translate + rotate bus ──
-  ctx.translate(bx,by);
-  ctx.rotate(angle);
-
-  // ── Parachute / balloon ──
-  const playersInBus=rPlayers.filter(p=>p.inBus);
-  if(playersInBus.length>0){
-    // Main balloon
-    const balloonColors=['#e74c3c','#f39c12','#e74c3c','#3498db'];
-    for(let i=0;i<4;i++){
-      ctx.fillStyle=balloonColors[i];
-      ctx.beginPath();
-      ctx.ellipse(-30+i*20,-55,16,22,0,0,Math.PI*2);
-      ctx.fill();
-      ctx.strokeStyle='rgba(0,0,0,0.2)';ctx.lineWidth=1;ctx.stroke();
-    }
-    // Balloon strings
-    ctx.strokeStyle='rgba(150,150,150,0.8)';ctx.lineWidth=1.5;
-    for(let i=0;i<4;i++){
-      ctx.beginPath();ctx.moveTo(-30+i*20,-33);ctx.lineTo(0,-18);ctx.stroke();
-    }
-  }
-
-  // ── Bus shadow ──
-  ctx.fillStyle='rgba(0,0,0,0.2)';
-  ctx.beginPath();ctx.ellipse(4,12,52,10,0,0,Math.PI*2);ctx.fill();
-
-  // ── Bus body ──
-  // Main body
-  ctx.fillStyle='#2980b9';
-  ctx.beginPath();ctx.roundRect(-48,-18,96,36,8);ctx.fill();
-  // Top section (slightly lighter)
-  ctx.fillStyle='#3498db';
-  ctx.beginPath();ctx.roundRect(-48,-18,96,20,{upperLeft:8,upperRight:8,lowerLeft:0,lowerRight:0});ctx.fill();
-  // Bottom stripe
-  ctx.fillStyle='#1a6a9a';
-  ctx.beginPath();ctx.roundRect(-48,10,96,8,{upperLeft:0,upperRight:0,lowerLeft:8,lowerRight:8});ctx.fill();
-  // Yellow stripe
-  ctx.fillStyle='#f1c40f';
-  ctx.fillRect(-48,6,96,5);
-
-  // ── Windows ──
-  ctx.fillStyle='rgba(200,240,255,0.85)';
-  for(let i=0;i<5;i++){
-    const wx=-36+i*18;
-    ctx.beginPath();ctx.roundRect(wx,-13,13,11,3);ctx.fill();
-    // Window reflection
-    ctx.fillStyle='rgba(255,255,255,0.3)';
-    ctx.beginPath();ctx.roundRect(wx,-12,4,4,1);ctx.fill();
-    ctx.fillStyle='rgba(200,240,255,0.85)';
-  }
-
-  // ── Windshield ──
-  ctx.fillStyle='rgba(180,230,255,0.7)';
-  ctx.beginPath();ctx.roundRect(32,-12,14,14,{upperLeft:2,upperRight:8,lowerLeft:2,lowerRight:4});ctx.fill();
-
-  // ── Headlights ──
-  ctx.fillStyle='rgba(255,255,200,0.9)';
-  ctx.beginPath();ctx.ellipse(47,-5,5,4,0,0,Math.PI*2);ctx.fill();
-  ctx.beginPath();ctx.ellipse(47,5,5,4,0,0,Math.PI*2);ctx.fill();
-  // Headlight glow
-  const hlg=ctx.createRadialGradient(47,0,0,47,0,20);
-  hlg.addColorStop(0,'rgba(255,255,150,0.3)');hlg.addColorStop(1,'transparent');
-  ctx.beginPath();ctx.arc(47,0,20,0,Math.PI*2);ctx.fillStyle=hlg;ctx.fill();
-
-  // ── Engine exhaust ──
-  ctx.fillStyle='rgba(150,150,150,0.15)';
-  for(let i=0;i<3;i++){
-    const smoke=Math.sin(now/200+i)*6;
-    ctx.beginPath();ctx.arc(-50-i*12+smoke,Math.sin(now/300+i)*4,(3-i)*3,0,Math.PI*2);ctx.fill();
-  }
-
-  // ── Text ──
-  ctx.fillStyle='#fff';ctx.font='bold 9px Inter';ctx.textAlign='center';
-  ctx.fillText('BATTLE BUS',0,4);
-
-  // ── Outline ──
-  ctx.strokeStyle='rgba(0,0,0,0.3)';ctx.lineWidth=2;
-  ctx.beginPath();ctx.roundRect(-48,-18,96,36,8);ctx.stroke();
-
-  ctx.restore();
-
-  // ── Players visible falling from bus ──
-  if(playersInBus.length>0){
-    ctx.save();
-    ctx.translate(bx,by);
-    // Show count badge
-    ctx.fillStyle='rgba(0,0,0,0.7)';
-    ctx.beginPath();ctx.roundRect(-18,-60,36,18,9);ctx.fill();
-    ctx.fillStyle='#f1c40f';ctx.font='bold 10px Inter';ctx.textAlign='center';
-    ctx.fillText(`✈ ${playersInBus.length}`,0,-47);
-    ctx.restore();
-  }
-}
 
 function drawParticles(){
   particles.forEach(p=>{
@@ -1056,12 +901,8 @@ function drawMinimap(){
   const z=rZone;
   mctx.beginPath();mctx.arc(z.x*scale,z.y*scale,z.radius*scale,0,Math.PI*2);
   mctx.strokeStyle='rgba(100,200,255,.85)';mctx.lineWidth=1.5;mctx.stroke();
-  if(rBus&&rBus.phase!=='done'){
-    mctx.beginPath();mctx.arc(rBus.x*scale,rBus.y*scale,5,0,Math.PI*2);
-    mctx.fillStyle='#3498db';mctx.fill();
-  }
   rPlayers.forEach(p=>{
-    if(!p.alive||p.inBus)return;
+    if(!p.alive)return;
     mctx.beginPath();mctx.arc(p.x*scale,p.y*scale,p.id===myId?5:3,0,Math.PI*2);
     mctx.fillStyle=p.color;mctx.fill();
     if(p.id===myId){mctx.strokeStyle='#fff';mctx.lineWidth=1.5;mctx.stroke();}
@@ -1104,7 +945,7 @@ function updateHUD(me){
     document.getElementById('fist-icon').textContent=me.fistAnim>0?'💥':'👊';
   } else {fistEl.style.display='none';}
 
-  const alive=rPlayers.filter(p=>p.alive&&!p.inBus).length;
+  const alive=rPlayers.filter(p=>p.alive).length;
   document.getElementById('alive-pill').textContent=`👥 ${alive} survivant${alive!==1?'s':''}`;
   document.getElementById('zone-pill').textContent=`⭕ ${inZone?'Zone sûre':'DANGER'}`;
   document.getElementById('zone-pill').style.color=inZone?'#74b9ff':'#e74c3c';
@@ -1124,7 +965,7 @@ connect();
 // Also remove renderFrame call from handleMsg to avoid double-render
 function gameRenderLoop(){
   requestAnimationFrame(gameRenderLoop);
-  if(gameState==='playing'||gameState==='bus') renderFrame();
+  if(gameState==='playing') renderFrame();
 }
 gameRenderLoop();
 </script>
